@@ -1,444 +1,495 @@
 import os
 import subprocess
 import tkinter as tk
-from tkinter import messagebox, simpledialog
+from tkinter import messagebox
+import customtkinter as ctk
 from pathlib import Path
 import threading
-import webbrowser
-import urllib.parse
 import json
+import re
+
+# Set Modern Appearance
+ctk.set_appearance_mode("Dark")
+ctk.set_default_color_theme("blue")
 
 # Windows constant to prevent subprocess from flashing a black CMD window
 CREATE_NO_WINDOW = 0x08000000
 
-class ToolTip:
-    """A simple ToolTip class for Tkinter widgets."""
-    def __init__(self, widget, text):
-        self.widget = widget
-        self.text = text
-        self.tipwindow = None
-        self.id = None
-        self.widget.bind("<Enter>", self.enter)
-        self.widget.bind("<Leave>", self.leave)
-
-    def enter(self, event=None):
-        self.schedule()
-
-    def leave(self, event=None):
-        self.unschedule()
-        self.hidetip()
-
-    def schedule(self):
-        self.unschedule()
-        self.id = self.widget.after(400, self.showtip)
-
-    def unschedule(self):
-        id = self.id
-        self.id = None
-        if id:
-            self.widget.after_cancel(id)
-
-    def showtip(self, event=None):
-        # Calculate exactly where the widget is on the screen
-        x = self.widget.winfo_rootx() + 20
-        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+class EditGameDialog(ctk.CTkToplevel):
+    """A custom dialog for editing an existing generated game."""
+    def __init__(self, parent, current_name, current_path):
+        super().__init__(parent)
+        self.title("Edit Game")
+        self.geometry("450x250")
+        self.resizable(False, False)
         
-        self.tipwindow = tw = tk.Toplevel(self.widget)
-        tw.wm_overrideredirect(True)
-        tw.wm_geometry("+%d+%d" % (x, y))
-        label = tk.Label(tw, text=self.text, justify=tk.LEFT,
-                         background="#ffffe0", relief=tk.SOLID, borderwidth=1,
-                         font=("tahoma", "9", "normal"))
-        label.pack(ipadx=1)
+        self.transient(parent)
+        self.grab_set()
 
-    def hidetip(self):
-        tw = self.tipwindow
-        self.tipwindow = None
-        if tw:
-            tw.destroy()
+        self.result_name = None
+        self.result_path = None
+
+        ctk.CTkLabel(self, text="Edit Game Name:", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 0), padx=20, anchor="w")
+        self.name_entry = ctk.CTkEntry(self, width=400)
+        self.name_entry.insert(0, current_name)
+        self.name_entry.pack(pady=(5, 10), padx=20)
+
+        ctk.CTkLabel(self, text="Edit EXE Path:", font=ctk.CTkFont(weight="bold")).pack(pady=0, padx=20, anchor="w")
+        self.path_entry = ctk.CTkEntry(self, width=400)
+        self.path_entry.insert(0, current_path)
+        self.path_entry.pack(pady=(5, 15), padx=20)
+
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=20)
+
+        cancel_btn = ctk.CTkButton(btn_frame, text="Cancel", fg_color="gray", command=self.destroy, width=100)
+        cancel_btn.pack(side="left")
+
+        save_btn = ctk.CTkButton(btn_frame, text="Save Changes", command=self.save_data, width=150)
+        save_btn.pack(side="right")
+
+    def save_data(self):
+        self.result_name = self.name_entry.get().strip()
+        self.result_path = self.path_entry.get().strip()
+        self.destroy()
 
 
-class DummyExeApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Discord Quest Completer")
-        # Slightly wider default width to comfortably fit the side-by-side layout
-        self.root.geometry("800x780")
-        self.root.minsize(700, 700)
+class DummyExeApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("Discord Quest Completer")
+        self.geometry("1100x800")
+        self.minsize(950, 650)
 
         self.base_dir = Path.cwd() / "DQC Game Folders"
-
-        # --- Mouse Scroll Binding (Cross-Platform) ---
-        self.root.bind_all("<MouseWheel>", self._on_mousewheel)
-        self.root.bind_all("<Button-4>", self._on_mousewheel)
-        self.root.bind_all("<Button-5>", self._on_mousewheel)
-
-        # --- USAGE GUIDE (Pinned to bottom) ---
-        guide_frame = tk.Frame(root, pady=10, padx=10, relief=tk.SUNKEN, bd=1)
-        guide_frame.pack(side=tk.BOTTOM, fill=tk.X)
         
-        guide_text = (
-            "Steps to Use:\n"
-            "1. Fill in the EXE Path field with the proper path structure of the game.\n"
-            "   e.g., Where Winds Meet/Engine/Binaries/Win64/wwm.exe\n"
-            "2. Click 'Create Executable' to generate a dummy game.\n"
-            "3. Click 'Start' from your list of games and the quest should start progressing.\n\n"
-            "Tips:\n"
-            "1. Use 'Search and fill' to auto-find paths and fill the fields. (Check more info from that section)\n"
-            "2. Set a Name to identify games easily and display it in the running window.\n"
-            "3. For help with finding paths, we suggest this subreddit: (This app is not affiliated with the subreddit)"
-        )
-        tk.Label(guide_frame, text=guide_text, justify=tk.LEFT, font=("Arial", 9)).pack(side=tk.LEFT)
+        self.active_search_game_btn = None
+        self.active_search_path_btn = None
+        self.active_gen_game_frame = None
         
-        reddit_main_link = tk.Label(guide_frame, text="r/DiscordQuests", fg="blue", cursor="hand2", font=("Arial", 9, "underline"))
-        reddit_main_link.pack(side=tk.LEFT, anchor=tk.S, pady=(0, 2))
-        reddit_main_link.bind("<Button-1>", lambda e: webbrowser.open("https://www.reddit.com/r/DiscordQuests/"))
-
-        # --- TOP SECTION: CREATE ---
-        top_frame = tk.Frame(root, pady=10, padx=10)
-        top_frame.pack(side=tk.TOP, fill=tk.X)
-
-        input_frame = tk.Frame(top_frame)
-        input_frame.pack(fill=tk.X, expand=True)
-
-        # Labels and Entries Grid
-        tk.Label(input_frame, text="Name (Optional):", font=("Arial", 9, "bold")).grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
-        self.name_entry = tk.Entry(input_frame)
-        self.name_entry.grid(row=0, column=1, sticky="ew", padx=(5, 10), pady=(0, 5))
-
-        tk.Label(input_frame, text="EXE Path:", font=("Arial", 9, "bold")).grid(row=1, column=0, sticky=tk.W)
-        self.path_entry = tk.Entry(input_frame)
-        self.path_entry.insert(0, "")
-        self.path_entry.grid(row=1, column=1, sticky="ew", padx=(5, 10))
-
-        # Create Button
-        self.create_btn = tk.Button(input_frame, text="Create Executable", command=self.create_exe, width=15, bg="#d4edda")
-        self.create_btn.grid(row=0, column=2, rowspan=2, sticky="nsew")
-
-        input_frame.columnconfigure(1, weight=1)
-
-        self.status_var = tk.StringVar()
-        self.status_var.set("Ready.")
-        self.status_label = tk.Label(top_frame, textvariable=self.status_var, fg="blue")
-        self.status_label.pack(anchor=tk.W, pady=(10, 0))
-
-        # --- Horizontal separator 1 ---
-        tk.Frame(top_frame, height=2, bd=1, relief=tk.SUNKEN).pack(fill=tk.X, pady=(10, 8))
-
-        # --- MIDDLE SPLIT SECTION (Search Left | DB Right) ---
-        split_frame = tk.Frame(top_frame)
-        split_frame.pack(fill=tk.X, pady=5)
-
-        # Define the width ratio (e.g., 2 to 1 means the left side gets 66% of the space)
-        split_frame.columnconfigure(0, weight=4) # Left side weight
-        split_frame.columnconfigure(2, weight=1) # Right side weight
-
-        # LEFT SIDE (Search)
-        left_search_frame = tk.Frame(split_frame)
-        left_search_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
-
-        # Vertical separator between the two halves
-        tk.Frame(split_frame, width=2, bd=1, relief=tk.SUNKEN).grid(row=0, column=1, sticky="ns", padx=5)
-
-        # RIGHT SIDE (Local DB)
-        right_db_frame = tk.Frame(split_frame)
-        right_db_frame.grid(row=0, column=2, sticky="nsew", padx=(10, 0))
-
-        # --- LEFT: Search & Auto Fill ---
-        search_header_frame = tk.Frame(left_search_frame)
-        search_header_frame.pack(fill=tk.X, pady=(0, 2))
+        self.search_results = []
+        self.selected_search_game = None
+        self.selected_search_path = None
+        self.path_labels = [] 
         
-        tk.Label(search_header_frame, text="Search and auto fill fields:", font=("Arial", 9, "bold")).pack(side=tk.LEFT)
-        search_tooltip = ("Type a game name below to find its exe path\n"
-                          "1. It checks your local 'game-index.json' file or queries Steam API.\n"
-                          "2. If found, it auto-fills the Name and EXE Path fields above.\n\n"
-                          "If not found or the path is incorrect, you can search on Google or the subreddit using the links below\n"
-                          "or update your local database in the section to the right.")
-        self.create_info_icon(search_header_frame, search_tooltip).pack(side=tk.LEFT, padx=5)
+        self.generated_frames = []
+        self.selected_generated_exe = None
+        self.running_status_labels = {} 
 
-        steamdb_frame = tk.Frame(left_search_frame, pady=5)
-        steamdb_frame.pack(fill=tk.X)
-
-        self.search_var = tk.StringVar()
-        self.search_var.trace_add("write", self.update_search_links)
-        
-        self.steamdb_entry = tk.Entry(steamdb_frame, textvariable=self.search_var)
-        self.steamdb_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
-
-        self.steamdb_btn = tk.Button(steamdb_frame, text="Search and fill", command=self.search_and_fill, width=15, bg="#cce5ff")
-        self.steamdb_btn.pack(side=tk.LEFT)
-
-        links_frame = tk.Frame(left_search_frame)
-        links_frame.pack(fill=tk.X, pady=(0, 5))
-
-        self.reddit_search_link = tk.Label(links_frame, text="", fg="blue", cursor="hand2", font=("Arial", 8, "underline"))
-        self.reddit_search_link.pack(side=tk.LEFT, padx=(0, 15))
-        self.reddit_search_link.bind("<Button-1>", lambda e: self.open_custom_search("reddit"))
-
-        self.google_search_link = tk.Label(links_frame, text="", fg="blue", cursor="hand2", font=("Arial", 8, "underline"))
-        self.google_search_link.pack(side=tk.LEFT)
-        self.google_search_link.bind("<Button-1>", lambda e: self.open_custom_search("google"))
-
-        self.update_search_links()
-
-        # --- RIGHT: Update Local Database ---
-        localdb_header_frame = tk.Frame(right_db_frame)
-        localdb_header_frame.pack(fill=tk.X, pady=(0, 2))
-        
-        tk.Label(localdb_header_frame, text="Update Local Database:", font=("Arial", 9, "bold")).pack(side=tk.LEFT)
-        db_tooltip = ("How to update your local game database:\n"
-                      "1. The link below takes you to r/DiscordQuests/wiki/game-index.\n"
-                      "2. After opening the page, press Ctrl + S to save the file.\n"
-                      "3. Save the file directly into this App's Directory.\n"
-                      "   (Use the 'Open App Directory' button to find it easily)\n\n"
-                      "This data is collected from a community maintained Subreddit.\n"
-                      "You have to redownload it from time to time to get the latest updates.")
-        self.create_info_icon(localdb_header_frame, db_tooltip).pack(side=tk.LEFT, padx=5)
-
-        # Container for Link and Button (taking 2 lines)
-        localdb_tools_frame = tk.Frame(right_db_frame)
-        localdb_tools_frame.pack(fill=tk.X, pady=(5, 0))
-
-        json_link = tk.Label(localdb_tools_frame, text="Download latest paths database", fg="blue", cursor="hand2", font=("Arial", 8, "underline"))
-        json_link.pack(anchor=tk.W, pady=(0, 5))
-        json_link.bind("<Button-1>", lambda e: webbrowser.open("https://www.reddit.com/r/DiscordQuests/wiki/game-index.json"))
-
-        open_folder_btn = tk.Button(localdb_tools_frame, text="Open App Directory", command=self.open_app_folder, font=("Arial", 8), bg="#e2e3e5")
-        open_folder_btn.pack(anchor=tk.W)
-
-        # --- Horizontal separator 3 ---
-        tk.Frame(top_frame, height=2, bd=1, relief=tk.SUNKEN).pack(fill=tk.X, pady=(15, 0))
-
-        # --- BOTTOM SECTION: DYNAMIC LIST ---
-        tk.Label(root, text="Generated Executables:", font=("Arial", 10, "bold")).pack(side=tk.TOP, anchor=tk.W, padx=10, pady=(5, 0))
-
-        list_container = tk.Frame(root)
-        list_container.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=(5, 10))
-
-        self.canvas = tk.Canvas(list_container, highlightthickness=0)
-        scrollbar = tk.Scrollbar(list_container, orient="vertical", command=self.canvas.yview)
-        self.scrollable_frame = tk.Frame(self.canvas)
-
-        self.scrollable_frame.bind(
-            "<Configure>",
-            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-        )
-
-        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        self.canvas.configure(yscrollcommand=scrollbar.set)
-
-        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
+        self._init_cache()
+        self.setup_ui()
         self.refresh_exe_list()
 
-    def create_info_icon(self, parent, tooltip_text):
-        """Creates a circular '?' icon and attaches a tooltip to it."""
-        canvas = tk.Canvas(parent, width=16, height=16, highlightthickness=0)
-        # Draw a circle
-        canvas.create_oval(1, 1, 15, 15, outline="#0056b3", width=1.5)
-        # Draw the question mark inside
-        canvas.create_text(8, 8, text="?", fill="#0056b3", font=("Arial", 8, "bold"))
-        # Attach our custom ToolTip
-        ToolTip(canvas, tooltip_text)
-        return canvas
+        self.bind("<FocusIn>", self._on_focus_in)
 
-    def _on_mousewheel(self, event):
-        """Cross-platform mouse wheel scrolling logic for the canvas."""
-        if hasattr(event, "delta") and event.delta != 0:
-            direction = -1 if event.delta > 0 else 1
-            self.canvas.yview_scroll(direction, "units")
-        elif hasattr(event, "num"):
-            if event.num == 4:
-                self.canvas.yview_scroll(-1, "units")
-            elif event.num == 5:
-                self.canvas.yview_scroll(1, "units")
+    def _init_cache(self):
+        self.cache_file = Path.cwd() / "discord_cache.json"
+        self.discord_cache = []
 
-    def update_search_links(self, *args):
-        self.reddit_search_link.config(text=f"Search for your keywords on subreddit")
-        self.google_search_link.config(text=f"Search for your keywords on Google")
+        if self.cache_file.exists():
+            try:
+                with open(self.cache_file, "r", encoding="utf-8") as f:
+                    self.discord_cache = json.load(f)
+            except Exception:
+                pass
 
-    def open_custom_search(self, target):
-        query = self.search_var.get().strip()
-        if not query:
-            messagebox.showinfo("Empty Search", "Please type a game name in the search field first.")
-            return
+        threading.Thread(target=self._fetch_latest_cache, daemon=True).start()
 
-        if target == "reddit":
-            safe_query = urllib.parse.quote(query)
-            url = f"https://www.reddit.com/r/DiscordQuests/search/?q={safe_query}"
-            webbrowser.open(url)
-        elif target == "google":
-            safe_query = urllib.parse.quote(f"{query} exe path")
-            url = f"https://www.google.com/search?q={safe_query}"
-            webbrowser.open(url)
-
-    def open_app_folder(self):
-        """Opens the current working directory in the Windows File Explorer."""
+    def _fetch_latest_cache(self):
         try:
-            os.startfile(str(Path.cwd()))
-        except Exception as e:
-            messagebox.showerror("Error", f"Could not open directory:\n{e}")
+            import requests
+            resp = requests.get("https://discord.com/api/applications/detectable", timeout=15)
+            if resp.status_code == 200:
+                data = resp.json()
+                self.discord_cache = data
+                with open(self.cache_file, "w", encoding="utf-8") as f:
+                    json.dump(data, f)
+        except Exception:
+            pass
 
-    def load_local_db(self):
-        """Parses the Reddit wiki JSON file if it exists in the app directory."""
-        db_path = Path.cwd() / "game-index.json"
-        local_games = []
-        if db_path.exists():
-            try:
-                with open(db_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    md = data.get("data", {}).get("content_md", "")
-                    lines = [line.strip() for line in md.split('\n') if line.strip()]
-                    
-                    for i in range(1, len(lines)):
-                        # Look for lines formatted as `..\Path\exe`
-                        if lines[i].startswith('`') and lines[i].endswith('`'):
-                            # The preceding line is the game name
-                            g_name = lines[i-1].replace("  ", "").strip() 
-                            g_path = lines[i].strip('`')
-                            
-                            # Clean up the path format
-                            if g_path.startswith("..\\") or g_path.startswith("../"):
-                                g_path = g_path[3:]
-                            g_path = g_path.replace("\\", "/")
-                            
-                            local_games.append({"name": g_name, "path": g_path})
-            except Exception as e:
-                print(f"Failed to parse game-index.json: {e}")
-        return local_games
+    def setup_ui(self):
+        self.grid_columnconfigure(0, weight=8) 
+        self.grid_columnconfigure(1, weight=2)
+        self.grid_rowconfigure(0, weight=1)
 
-    def search_and_fill(self):
-        game_query = self.steamdb_entry.get().strip()
-        if not game_query:
-            messagebox.showinfo("Input Needed", "Please type a game name in the search field above.")
-            return
-
-        # 1. Search the Local Database First
-        local_db = self.load_local_db()
-        best_match = None
-
-        # Check for exact match
-        for game in local_db:
-            if game['name'].lower() == game_query.lower():
-                best_match = game
-                break
+        # ==================== LEFT FRAME (Creation & Search) ====================
+        left_frame = ctk.CTkFrame(self, fg_color="transparent")
+        left_frame.grid(row=0, column=0, sticky="nsew", padx=(15, 10), pady=15)
         
-        # Check for substring match if no exact match
-        if not best_match:
-            matches = [g for g in local_db if game_query.lower() in g['name'].lower()]
-            if matches:
-                # Pick the closest match by string length
-                matches.sort(key=lambda x: abs(len(x["name"]) - len(game_query)))
-                best_match = matches[0]
+        # --- Manual Entry Section (Boxed) ---
+        manual_container = ctk.CTkFrame(left_frame, border_width=1, border_color="gray30", fg_color="transparent")
+        manual_container.pack(fill="x", pady=(0, 15))
 
-        if best_match:
-            # Match found locally! Update instantly.
-            self.name_entry.delete(0, tk.END)
-            self.name_entry.insert(0, best_match["name"])
-            self.path_entry.delete(0, tk.END)
-            self.path_entry.insert(0, best_match["path"])
-            self.status_var.set(f"Found '{best_match['name']}' in local game-index.json!")
-            self.status_label.config(fg="green")
+        manual_header_frame = ctk.CTkFrame(manual_container, fg_color="transparent")
+        manual_header_frame.pack(fill="x", padx=15, pady=(15, 5))
+        
+        ctk.CTkLabel(manual_header_frame, text="Manual Creation", font=ctk.CTkFont(size=16, weight="bold")).pack(side="left")
+        self.manual_create_btn = ctk.CTkButton(manual_header_frame, text="Create Game", command=self.create_exe_manual, fg_color="#28a745", hover_color="#218838", width=120)
+        self.manual_create_btn.pack(side="right")
+
+        manual_inputs_frame = ctk.CTkFrame(manual_container, fg_color="transparent")
+        manual_inputs_frame.pack(fill="x", padx=15, pady=(0, 15))
+        
+        ctk.CTkLabel(manual_inputs_frame, text="Name (Optional):").grid(row=0, column=0, padx=(0, 10), pady=5, sticky="w")
+        self.name_entry = ctk.CTkEntry(manual_inputs_frame)
+        self.name_entry.grid(row=0, column=1, padx=0, pady=5, sticky="ew")
+        
+        ctk.CTkLabel(manual_inputs_frame, text="EXE Path:").grid(row=1, column=0, padx=(0, 10), pady=(0, 5), sticky="w")
+        self.path_entry = ctk.CTkEntry(manual_inputs_frame)
+        self.path_entry.grid(row=1, column=1, padx=0, pady=(0, 5), sticky="ew")
+        
+        manual_inputs_frame.grid_columnconfigure(1, weight=1)
+
+        # --- Search Section (Boxed) ---
+        search_container = ctk.CTkFrame(left_frame, border_width=1, border_color="gray30", fg_color="transparent")
+        search_container.pack(fill="both", expand=True)
+
+        ctk.CTkLabel(search_container, text="Search", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", padx=15, pady=(15, 5))
+        
+        self.search_entry = ctk.CTkEntry(search_container, placeholder_text="Type here to search for paths from Discord API/Steam...")
+        self.search_entry.pack(fill="x", padx=15, pady=(0, 10))
+        self.search_entry.bind("<KeyRelease>", self._on_search_typing)
+        self.search_entry.bind("<Return>", lambda e: self.create_and_run_from_search())
+
+        lists_frame = ctk.CTkFrame(search_container, fg_color="transparent")
+        lists_frame.pack(fill="both", expand=True, padx=15, pady=(0, 10))
+        lists_frame.grid_columnconfigure(0, weight=1)
+        lists_frame.grid_columnconfigure(1, weight=1)
+        lists_frame.grid_rowconfigure(1, weight=1)
+
+        ctk.CTkLabel(lists_frame, text="Select Game:", font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, sticky="w", padx=0)
+        self.games_scroll = ctk.CTkScrollableFrame(lists_frame)
+        self.games_scroll.grid(row=1, column=0, sticky="nsew", padx=(0, 5))
+
+        ctk.CTkLabel(lists_frame, text="Select Path:", font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=1, sticky="w", padx=5)
+        self.paths_scroll = ctk.CTkScrollableFrame(lists_frame)
+        self.paths_scroll.grid(row=1, column=1, sticky="nsew", padx=(5, 0))
+        
+        self.paths_scroll.bind("<Configure>", self._on_paths_scroll_resize)
+
+        search_action_frame = ctk.CTkFrame(search_container, fg_color="transparent")
+        search_action_frame.pack(fill="x", padx=15, pady=(5, 15))
+        
+        self.edit_btn = ctk.CTkButton(search_action_frame, text="Edit in Manual Fields", command=self.copy_to_manual, fg_color="#6c757d", hover_color="#5a6268")
+        self.edit_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        
+        self.create_search_btn = ctk.CTkButton(search_action_frame, text="Create Game", command=self.create_from_search, fg_color="#17a2b8", hover_color="#138496")
+        self.create_search_btn.pack(side="left", fill="x", expand=True, padx=(5, 5))
+
+        self.create_run_search_btn = ctk.CTkButton(search_action_frame, text="Create & Run (Enter)", command=self.create_and_run_from_search, fg_color="#28a745", hover_color="#218838")
+        self.create_run_search_btn.pack(side="left", fill="x", expand=True, padx=(5, 0))
+
+        self.status_label = ctk.CTkLabel(left_frame, text="Ready.", text_color="gray")
+        self.status_label.pack(anchor="w", pady=(5, 0))
+
+
+        # ==================== RIGHT FRAME (Generated Games) ====================
+        right_frame = ctk.CTkFrame(self, fg_color="transparent")
+        right_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 15), pady=15)
+        
+        ctk.CTkLabel(right_frame, text="Generated Games", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", pady=(0, 10))
+
+        self.generated_scroll = ctk.CTkScrollableFrame(right_frame)
+        self.generated_scroll.pack(fill="both", expand=True, pady=(0, 15))
+
+        gen_action_frame = ctk.CTkFrame(right_frame, fg_color="transparent")
+        gen_action_frame.pack(fill="x")
+        
+        self.run_btn = ctk.CTkButton(gen_action_frame, text="Run", command=self.run_game, fg_color="#007bff", hover_color="#0069d9", state="disabled")
+        self.run_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
+
+        self.edit_gen_btn = ctk.CTkButton(gen_action_frame, text="Edit", command=self.edit_generated_game, fg_color="#ffc107", hover_color="#e0a800", text_color="black", state="disabled")
+        self.edit_gen_btn.pack(side="left", fill="x", expand=True, padx=(5, 5))
+
+        self.del_btn = ctk.CTkButton(gen_action_frame, text="Delete", command=self.delete_game, fg_color="#dc3545", hover_color="#c82333", state="disabled")
+        self.del_btn.pack(side="left", fill="x", expand=True, padx=(5, 0))
+
+
+    # ==================== VALIDATION LOGIC ====================
+    def is_valid_path(self, path_str):
+        path_str = path_str.strip()
+        if not path_str: return False, "Path cannot be empty."
+        if "://" in path_str or "?" in path_str or "=" in path_str: return False, "URIs or web links are not valid paths."
+        invalid_chars = r'[<>:"|?*]'
+        if re.search(invalid_chars, path_str): return False, "Path contains invalid Windows characters (< > : \" | ? *)."
+        if not path_str.lower().endswith(".exe"): return False, "Path must end with '.exe'."
+        return True, "Valid"
+
+    # ==================== SEARCH LOGIC ====================
+    def normalize_string(self, text):
+        """Strips symbols, punctuation, and extra spaces for smarter search matching."""
+        if not text: return ""
+        # Lowercase, replace non-alphanumeric with space, collapse multi-spaces
+        clean = re.sub(r'[^a-z0-9\s]', ' ', text.lower())
+        return re.sub(r'\s+', ' ', clean).strip()
+
+    def _on_search_typing(self, event):
+        if event.keysym in ('Tab', 'Return', 'Left', 'Right', 'Up', 'Down', 'Shift_L', 'Shift_R', 'Control_L', 'Control_R', 'Alt_L', 'Alt_R'):
             return
 
-        # 2. Not found locally, fallback to Steam API
-        self.steamdb_btn.config(state=tk.DISABLED)
-        self.status_var.set(f"Not found locally. Searching Steam for '{game_query}'...")
-        self.status_label.config(fg="orange")
-        self.root.update()
+        if hasattr(self, '_search_timer') and self._search_timer:
+            self.after_cancel(self._search_timer)
+            
+        self._search_timer = self.after(500, self.perform_search)
 
-        def fetch_task():
-            try:
+    def perform_search(self):
+        query = self.search_entry.get().strip()
+        
+        if len(query) < 3:
+            for widget in self.games_scroll.winfo_children(): widget.destroy()
+            for widget in self.paths_scroll.winfo_children(): widget.destroy()
+            self.search_results.clear()
+            self.selected_search_game = None
+            self.selected_search_path = None
+            
+            if query:
+                self._update_status("Type at least 3 characters to search...", "gray")
+            else:
+                self._update_status("Ready.", "gray")
+            return
+
+        self.status_label.configure(text=f"Searching Discord API for '{query}'...", text_color="orange")
+        
+        for widget in self.games_scroll.winfo_children(): widget.destroy()
+        for widget in self.paths_scroll.winfo_children(): widget.destroy()
+        
+        self.search_results.clear()
+        self.selected_search_game = None
+        self.selected_search_path = None
+        self.active_search_game_btn = None
+        self.active_search_path_btn = None
+        self.path_labels.clear()
+
+        threading.Thread(target=self._fetch_discord_data, args=(query,), daemon=True).start()
+
+    def _fetch_discord_data(self, query):
+        try:
+            if not self.discord_cache:
                 import requests
-                from steam.client import SteamClient
-            except ImportError:
-                def show_import_error():
-                    messagebox.showerror("Missing Libraries",
-                        "To use Steam Search, you must install the required libraries.\n\n"
-                        "Open Command Prompt and run:\n"
-                        "pip install requests steam")
-                    self.status_var.set("Missing required python packages.")
-                    self.status_label.config(fg="red")
-                    self.steamdb_btn.config(state=tk.NORMAL)
-                self.root.after(0, show_import_error)
+                resp = requests.get("https://discord.com/api/applications/detectable", timeout=10)
+                self.discord_cache = resp.json()
+            
+            query_norm = self.normalize_string(query)
+            matches = []
+
+            for app in self.discord_cache:
+                name = app.get("name", "")
+                aliases = app.get("aliases", [])
+                
+                # Check normalized main name and all aliases
+                search_targets = [name] + aliases
+                matched = False
+                
+                for target in search_targets:
+                    if query_norm in self.normalize_string(target):
+                        matched = True
+                        break
+
+                if matched:
+                    execs = app.get("executables", [])
+                    valid_paths = [e["name"].replace("\\", "/") for e in execs if e.get("os") == "win32"]
+                    
+                    clean_paths = []
+                    for p in valid_paths:
+                        valid, _ = self.is_valid_path(p)
+                        if valid: clean_paths.append(p)
+                        elif not "://" in p and p.endswith(".exe"): 
+                            clean_paths.append(p)
+
+                    if clean_paths:
+                        matches.append({"name": name, "norm_name": self.normalize_string(name), "paths": clean_paths})
+
+            if matches:
+                # Sort best matches: Exact length matches float to top
+                matches.sort(key=lambda x: abs(len(x["norm_name"]) - len(query_norm)))
+                self.search_results = matches
+                self.after(0, self._populate_games_list)
+            else:
+                self.after(0, lambda: self._fallback_steam_search(query))
+
+        except Exception as e:
+            self.after(0, lambda: self._update_status("Please install 'requests' via terminal for live search.", "red"))
+
+    def _fallback_steam_search(self, query):
+        self.status_label.configure(text=f"Not found in Discord. Searching Steam...", text_color="orange")
+        try:
+            import requests
+            from steam.client import SteamClient
+            
+            search_url = f'https://store.steampowered.com/api/storesearch/?term={query}&l=english&cc=US'
+            search_resp = requests.get(search_url, timeout=10).json()
+
+            if not search_resp.get('items'):
+                self._update_status(f"Game '{query}' not found anywhere.", "red")
                 return
 
+            game_data = search_resp['items'][0]
+            app_id = game_data['id']
+            official_name = game_data['name']
+
+            self.status_label.configure(text=f"Found '{official_name}' on Steam. Fetching path...", text_color="orange")
+
+            client = SteamClient()
             try:
-                search_url = f'https://store.steampowered.com/api/storesearch/?term={game_query}&l=english&cc=US'
-                search_resp = requests.get(search_url, timeout=10).json()
+                client.anonymous_login()
+                product_info = client.get_product_info(apps=[app_id])
+                
+                app_config = product_info['apps'][app_id].get('config', {})
+                install_dir = app_config.get('installdir', official_name)
+                
+                launch_data = app_config.get('launch', {})
+                exe_rel_path = 'unknown.exe'
+                if launch_data:
+                    first_launch = list(launch_data.values())[0]
+                    exe_rel_path = first_launch.get('executable', 'unknown.exe')
 
-                if not search_resp.get('items'):
-                    self.root.after(0, lambda: self.status_var.set(f"Game '{game_query}' not found on Steam."))
-                    self.root.after(0, lambda: self.status_label.config(fg="red"))
-                    self.root.after(0, lambda: self.steamdb_btn.config(state=tk.NORMAL))
-                    return
+                final_path = f"common/{install_dir}/{exe_rel_path}".replace("\\", "/")
+                
+                valid, _ = self.is_valid_path(final_path)
+                if not valid:
+                    if not final_path.lower().endswith(".exe"): final_path += ".exe"
 
-                game_data = search_resp['items'][0]
-                app_id = game_data['id']
-                official_name = game_data['name']
+                self.search_results = [{"name": official_name, "paths": [final_path]}]
+                self.after(0, self._populate_games_list)
+                
+            finally:
+                client.disconnect()
+                
+        except Exception as e:
+            self._update_status("Please install 'requests' and 'steam' to search Steam API.", "red")
 
-                self.root.after(0, lambda: self.status_var.set(f"Found '{official_name}'. Contacting Steam servers for path..."))
+    def _populate_games_list(self):
+        self._update_status("Search complete.", "green")
+        
+        first_btn = None
+        for i, game_data in enumerate(self.search_results):
+            btn = ctk.CTkButton(self.games_scroll, text=game_data["name"], anchor="w", fg_color="transparent", text_color=("gray10", "gray90"), hover_color=("gray70", "gray30"))
+            btn.configure(command=lambda g=game_data, b=btn: self._select_search_game(g, b))
+            btn.pack(fill="x", pady=2)
+            if i == 0: first_btn = btn
+            
+        if self.search_results and first_btn:
+            self._select_search_game(self.search_results[0], first_btn)
 
-                client = SteamClient()
-                try:
-                    client.anonymous_login()
-                    product_info = client.get_product_info(apps=[app_id])
+    def _select_search_game(self, game_data, active_btn):
+        self.selected_search_game = game_data["name"]
+        
+        if self.active_search_game_btn and self.active_search_game_btn.winfo_exists():
+            self.active_search_game_btn.configure(fg_color="transparent")
+        
+        active_btn.configure(fg_color=("#3b8ed0", "#1f538d"))
+        self.active_search_game_btn = active_btn
 
-                    if not product_info or 'apps' not in product_info:
-                        raise Exception("Steam network failed to return product info.")
+        for widget in self.paths_scroll.winfo_children(): widget.destroy()
+        self.active_search_path_btn = None
+        self.path_labels.clear()
+        
+        first_frame = None
+        for i, p in enumerate(game_data["paths"]):
+            item_frame = ctk.CTkFrame(self.paths_scroll, border_width=1, border_color="gray30", fg_color="transparent", corner_radius=6)
+            item_frame.pack(fill="x", pady=2, padx=2)
+            
+            lbl = ctk.CTkLabel(item_frame, text=p, justify="left", anchor="w", text_color=("gray10", "gray90"))
+            lbl.pack(fill="x", padx=10, pady=5)
+            
+            for w in (item_frame, lbl):
+                w.bind("<Button-1>", lambda e, p_val=p, f=item_frame: self._select_search_path(p_val, f))
+                
+            self.path_labels.append(lbl)
+            if i == 0: first_frame = item_frame
+            
+        self.update_idletasks()
+        self._apply_path_wraplength(self.paths_scroll.winfo_width())
 
-                    app_config = product_info['apps'][app_id].get('config', {})
-                    install_dir = app_config.get('installdir', official_name)
-                    launch_data = app_config.get('launch', {})
-                    exe_rel_path = 'unknown.exe'
+        if game_data["paths"] and first_frame:
+            self._select_search_path(game_data["paths"][0], first_frame)
 
-                    if launch_data:
-                        first_launch = list(launch_data.values())[0]
-                        exe_rel_path = first_launch.get('executable', 'unknown.exe')
+    def _select_search_path(self, path_str, active_frame):
+        self.selected_search_path = path_str
+        if self.active_search_path_btn and self.active_search_path_btn.winfo_exists():
+            self.active_search_path_btn.configure(fg_color="transparent")
+        active_frame.configure(fg_color=("#3b8ed0", "#1f538d"))
+        self.active_search_path_btn = active_frame
 
-                    exe_rel_path = exe_rel_path.replace("\\\\", "/").replace("\\", "/")
-                    final_path = f"common/{install_dir}/{exe_rel_path}"
+    def _on_paths_scroll_resize(self, event):
+        if hasattr(self, '_resize_timer') and self._resize_timer:
+            self.after_cancel(self._resize_timer)
+        self._resize_timer = self.after(150, lambda: self._apply_path_wraplength(event.width))
 
-                    def update_ui_success():
-                        self.name_entry.delete(0, tk.END)
-                        self.name_entry.insert(0, official_name)
-                        self.path_entry.delete(0, tk.END)
-                        self.path_entry.insert(0, final_path)
-                        self.status_var.set(f"Successfully loaded Steam path for '{official_name}'")
-                        self.status_label.config(fg="green")
-                        self.steamdb_btn.config(state=tk.NORMAL)
+    def _apply_path_wraplength(self, width):
+        target_wrap = max(50, width - 40)
+        for lbl in self.path_labels:
+            if lbl.winfo_exists():
+                lbl.configure(wraplength=target_wrap)
 
-                    self.root.after(0, update_ui_success)
 
-                finally:
-                    client.disconnect()
+    # ==================== CREATION LOGIC ====================
+    def copy_to_manual(self):
+        if not self.selected_search_game or not self.selected_search_path:
+            messagebox.showinfo("Selection Required", "Please select a game and path from the search results first.")
+            return
+        self.name_entry.delete(0, tk.END)
+        self.name_entry.insert(0, self.selected_search_game)
+        self.path_entry.delete(0, tk.END)
+        self.path_entry.insert(0, self.selected_search_path)
+        self._update_status("Copied to manual entry.", "green")
 
-            except Exception as e:
-                def update_ui_err():
-                    self.status_var.set("Error while fetching data.")
-                    self.status_label.config(fg="red")
-                    self.steamdb_btn.config(state=tk.NORMAL)
-                    messagebox.showerror("Network Error", f"Could not fetch data:\n{str(e)}")
-                self.root.after(0, update_ui_err)
+    def create_from_search(self):
+        if not self.selected_search_game or not self.selected_search_path:
+            messagebox.showinfo("Selection Required", "Please select a game and path from the search results first.")
+            return
+        self._process_creation(self.selected_search_game, self.selected_search_path)
 
-        threading.Thread(target=fetch_task, daemon=True).start()
+    def create_and_run_from_search(self):
+        if not self.selected_search_game or not self.selected_search_path:
+            messagebox.showinfo("Selection Required", "Please select a game and path from the search results first.")
+            return
+        exe_path = self._process_creation(self.selected_search_game, self.selected_search_path)
+        if exe_path:
+            self.run_game_by_path(exe_path)
 
-    def find_builtin_compiler(self):
-        windir = os.environ.get('WINDIR', 'C:\\Windows')
-        possible_paths = [
-            Path(windir) / "Microsoft.NET" / "Framework64" / "v4.0.30319" / "csc.exe",
-            Path(windir) / "Microsoft.NET" / "Framework" / "v4.0.30319" / "csc.exe"
-        ]
-        for p in possible_paths:
-            if p.exists():
-                return p
-        return None
+    def create_exe_manual(self):
+        name = self.name_entry.get().strip()
+        path = self.path_entry.get().strip()
+        if not path:
+            messagebox.showerror("Error", "Please enter an EXE Path manually.")
+            return
+        self._process_creation(name, path)
 
+    def _process_creation(self, game_name, rel_path):
+        if not rel_path.lower().endswith(".exe"): rel_path += ".exe"
+            
+        is_valid, msg = self.is_valid_path(rel_path)
+        if not is_valid:
+            messagebox.showerror("Invalid Path", f"The path provided is invalid:\n{msg}")
+            return None
+            
+        exe_path = self.base_dir / rel_path
+        self._update_status("Compiling...", "orange")
+        self.update()
+
+        success = self._compile_dummy_exe(exe_path, rel_path, game_name)
+        if success:
+            self._update_status(f"Success: {exe_path.name}", "green")
+            self.refresh_exe_list(auto_select_path=exe_path)
+            return exe_path
+        else:
+            self._update_status("Compilation failed.", "red")
+            return None
+
+
+    # ==================== COMPILER LOGIC ====================
     def _compile_dummy_exe(self, exe_path, rel_path, game_name):
-        csc_compiler = self.find_builtin_compiler()
-        if not csc_compiler:
-            messagebox.showerror("Error", "Could not find the built-in Windows C# compiler (.NET Framework).")
+        windir = os.environ.get('WINDIR', 'C:\\Windows')
+        compiler_path = None
+        for p in [Path(windir) / "Microsoft.NET" / "Framework64" / "v4.0.30319" / "csc.exe", 
+                  Path(windir) / "Microsoft.NET" / "Framework" / "v4.0.30319" / "csc.exe"]:
+            if p.exists():
+                compiler_path = p
+                break
+                
+        if not compiler_path:
+            messagebox.showerror("Error", "Windows C# compiler (.NET Framework) missing.")
             return False
 
         try:
@@ -447,7 +498,6 @@ class DummyExeApp:
             txt_path = target_dir / f"{exe_path.stem}.txt"
 
             target_dir.mkdir(parents=True, exist_ok=True)
-
             window_title = game_name if game_name else rel_path
 
             cs_code = f"""
@@ -481,179 +531,229 @@ class DummyExeApp:
             with open(cs_path, 'w') as cs_file:
                 cs_file.write(cs_code)
 
-            compile_cmd = [
-                str(csc_compiler),
-                "/nologo",
-                "/target:winexe",
-                "/r:System.Windows.Forms.dll",
-                f"/out:{exe_path}",
-                str(cs_path)
-            ]
-
+            compile_cmd = [str(compiler_path), "/nologo", "/target:winexe", "/r:System.Windows.Forms.dll", f"/out:{exe_path}", str(cs_path)]
             result = subprocess.run(compile_cmd, capture_output=True, text=True, creationflags=CREATE_NO_WINDOW)
-
             cs_path.unlink(missing_ok=True)
 
             if result.returncode == 0:
                 if game_name:
-                    with open(txt_path, 'w', encoding='utf-8') as txt_file:
-                        txt_file.write(game_name)
+                    with open(txt_path, 'w', encoding='utf-8') as txt_file: txt_file.write(game_name)
                 else:
                     txt_path.unlink(missing_ok=True)
                 return True
             else:
                 messagebox.showerror("Compilation Error", f"Failed:\n{result.stderr}")
                 return False
-
         except Exception as e:
             messagebox.showerror("Error", str(e))
             return False
 
-    def create_exe(self):
-        rel_path = self.path_entry.get().strip()
-        game_name = self.name_entry.get().strip()
 
-        if not rel_path:
-            messagebox.showerror("Input Error", "The path cannot be empty.")
-            return
-
-        if not rel_path.lower().endswith(".exe"):
-            rel_path += ".exe"
-            self.path_entry.delete(0, tk.END)
-            self.path_entry.insert(0, rel_path)
-
-        exe_path = self.base_dir / rel_path
-
-        self.status_var.set("Compiling...")
-        self.root.update()
-
-        success = self._compile_dummy_exe(exe_path, rel_path, game_name)
-        if success:
-            self.status_var.set(f"Successfully created: {exe_path.name}")
-            self.status_label.config(fg="green")
-            self.name_entry.delete(0, tk.END)
-            self.refresh_exe_list()
-        else:
-            self.status_var.set("Compilation failed.")
-            self.status_label.config(fg="red")
-
-    def refresh_exe_list(self):
-        for widget in self.scrollable_frame.winfo_children():
+    # ==================== GENERATED GAMES ====================
+    def refresh_exe_list(self, auto_select_path=None):
+        for widget in self.generated_scroll.winfo_children():
             widget.destroy()
 
         self.base_dir.mkdir(parents=True, exist_ok=True)
         exes = list(self.base_dir.rglob("*.exe"))
 
+        self.selected_generated_exe = None
+        self.active_gen_game_frame = None
+        self.running_status_labels.clear()
+        self._toggle_action_buttons(False)
+
         if not exes:
-            tk.Label(self.scrollable_frame, text="No executables found. Create one above.", fg="grey").pack(pady=10)
+            ctk.CTkLabel(self.generated_scroll, text="No executables found.\nCreate one from the left.", text_color="gray").pack(pady=20)
             return
 
+        target_frame = None
+
         for exe_path in sorted(exes):
-            self.create_list_item(exe_path)
+            rel_path = str(exe_path.relative_to(self.base_dir)).replace("\\", "/")
+            
+            txt_path = exe_path.parent / f"{exe_path.stem}.txt"
+            game_name = ""
+            if txt_path.exists():
+                try: game_name = txt_path.read_text(encoding='utf-8').strip()
+                except: pass
 
-    def create_list_item(self, exe_path):
-        row_frame = tk.Frame(self.scrollable_frame, bd=1, relief=tk.SOLID)
-        row_frame.pack(fill=tk.X, pady=3, padx=2)
+            display_name = game_name if game_name else "Unnamed Game"
 
-        rel_path_str = str(exe_path.relative_to(self.base_dir)).replace("\\", "/")
+            item_frame = ctk.CTkFrame(self.generated_scroll, border_width=1, border_color="gray30", fg_color="transparent", corner_radius=6)
+            item_frame.pack(fill="x", pady=3, padx=2)
+            
+            # --- Top row: Name + Running Status ---
+            name_row = ctk.CTkFrame(item_frame, fg_color="transparent")
+            name_row.pack(fill="x", padx=10, pady=(5, 0))
 
-        txt_path = exe_path.parent / f"{exe_path.stem}.txt"
-        game_name = ""
-        if txt_path.exists():
-            try:
-                game_name = txt_path.read_text(encoding='utf-8').strip()
-            except Exception:
-                pass
+            name_lbl = ctk.CTkLabel(name_row, text=display_name, font=ctk.CTkFont(size=14, weight="bold"), anchor="w", cursor="hand2")
+            name_lbl.pack(side="left")
+            
+            status_lbl = ctk.CTkLabel(name_row, text="", font=ctk.CTkFont(size=12, weight="bold"))
+            status_lbl.pack(side="left", padx=(10, 0))
+            self.running_status_labels[exe_path] = status_lbl
 
-        display_text = game_name if game_name else rel_path_str
+            # --- Bottom row: Path ---
+            path_lbl = ctk.CTkLabel(item_frame, text=rel_path, font=ctk.CTkFont(size=11), text_color="gray60", anchor="w", cursor="hand2")
+            path_lbl.pack(fill="x", padx=10, pady=(0, 5))
 
-        name_label = tk.Label(row_frame, text=display_text, anchor=tk.W, font=("Courier", 10, "bold" if game_name else "normal"))
-        name_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=5)
+            for w in (item_frame, name_row, name_lbl, path_lbl, status_lbl):
+                w.bind("<Button-1>", lambda e, p=exe_path, f=item_frame: self._select_generated_game(p, f))
+            
+            if auto_select_path and exe_path == auto_select_path:
+                target_frame = item_frame
 
-        ToolTip(name_label, f"Path: {rel_path_str}")
+        if target_frame and auto_select_path:
+            self._select_generated_game(auto_select_path, target_frame)
+            
+        self._trigger_status_update()
 
-        btn_start = tk.Button(row_frame, text="Start", width=8, bg="#cce5ff",
-                              command=lambda p=exe_path: self.start_exe(p))
-        btn_start.pack(side=tk.LEFT, padx=2, pady=5)
+    def _select_generated_game(self, exe_path, active_frame):
+        self.selected_generated_exe = exe_path
+        
+        if self.active_gen_game_frame and self.active_gen_game_frame.winfo_exists():
+            self.active_gen_game_frame.configure(fg_color="transparent")
+            
+        active_frame.configure(fg_color=("#3b8ed0", "#1f538d"))
+        self.active_gen_game_frame = active_frame
+        
+        self._toggle_action_buttons(True)
 
-        btn_rename = tk.Button(row_frame, text="Rename", width=8, bg="#e2e3e5",
-                               command=lambda p=exe_path, n=game_name, r=rel_path_str: self.rename_exe(p, n, r))
-        btn_rename.pack(side=tk.LEFT, padx=2, pady=5)
+    def _toggle_action_buttons(self, state):
+        s = "normal" if state else "disabled"
+        self.run_btn.configure(state=s)
+        self.edit_gen_btn.configure(state=s)
+        self.del_btn.configure(state=s)
 
-        btn_del = tk.Button(row_frame, text="Delete", width=8, bg="#f8d7da",
-                            command=lambda p=exe_path, t=txt_path: self.delete_exe(p, t))
-        btn_del.pack(side=tk.LEFT, padx=(2, 5), pady=5)
-
-    def is_running(self, exe_name):
-        try:
-            cmd = ["tasklist", "/FI", f"IMAGENAME eq {exe_name}"]
-            result = subprocess.run(cmd, capture_output=True, text=True, creationflags=CREATE_NO_WINDOW)
-            return exe_name.lower() in result.stdout.lower()
-        except Exception:
-            return False
-
-    def start_exe(self, exe_path):
-        if not exe_path.exists():
+    def run_game(self):
+        if not self.selected_generated_exe or not self.selected_generated_exe.exists():
             messagebox.showerror("Error", "File not found.")
             self.refresh_exe_list()
             return
-
+        self.run_game_by_path(self.selected_generated_exe)
+        
+    def run_game_by_path(self, exe_path):
         exe_name = exe_path.name
-        if self.is_running(exe_name):
-            self.status_var.set(f"{exe_name} is already running.")
-            self.status_label.config(fg="orange")
-        else:
-            try:
-                subprocess.Popen([str(exe_path)], creationflags=CREATE_NO_WINDOW)
-                self.status_var.set(f"Started: {exe_name}")
-                self.status_label.config(fg="green")
-            except Exception as e:
-                messagebox.showerror("Launch Error", str(e))
-
-    def rename_exe(self, exe_path, current_name, rel_path_str):
-        if self.is_running(exe_path.name):
-            messagebox.showwarning("In Use", f"'{exe_path.name}' is currently running.\nPlease close its window before renaming it.")
-            return
-
-        new_name = simpledialog.askstring("Rename / Add Name",
-                                          "Enter name for this executable\n(Leave blank to revert to path):",
-                                          initialvalue=current_name)
-
-        if new_name is not None:
-            new_name = new_name.strip()
-            self.status_var.set("Recompiling with new name...")
-            self.root.update()
-
-            success = self._compile_dummy_exe(exe_path, rel_path_str, new_name)
-
-            if success:
-                self.status_var.set(f"Successfully updated: {exe_path.name}")
-                self.status_label.config(fg="green")
-                self.refresh_exe_list()
-            else:
-                self.status_var.set("Failed to rename/recompile.")
-                self.status_label.config(fg="red")
-
-    def delete_exe(self, exe_path, txt_path):
-        if self.is_running(exe_path.name):
-            messagebox.showwarning("In Use", f"'{exe_path.name}' is currently running.\nPlease close its window before deleting it.")
-            return
         try:
-            if exe_path.exists():
-                exe_path.unlink()
-            if txt_path.exists():
-                txt_path.unlink()
+            cmd = ["tasklist", "/FI", f"IMAGENAME eq {exe_name}"]
+            res = subprocess.run(cmd, capture_output=True, text=True, creationflags=CREATE_NO_WINDOW)
+            if exe_name.lower() in res.stdout.lower():
+                self._update_status(f"{exe_name} is already running.", "orange")
+                return
+        except: pass
 
-            self.status_var.set(f"Deleted: {exe_path.name}")
-            self.status_label.config(fg="black")
-            self.refresh_exe_list()
-        except PermissionError:
-            messagebox.showerror("Permission Error", "File is locked. Make sure you closed the game window.")
+        try:
+            subprocess.Popen([str(exe_path)], creationflags=CREATE_NO_WINDOW)
+            self._update_status(f"Started: {exe_name}", "green")
+            self._trigger_status_update()
         except Exception as e:
-            messagebox.showerror("Delete Error", str(e))
+            messagebox.showerror("Launch Error", str(e))
+
+    def _on_focus_in(self, event):
+        if str(event.widget) == ".":
+            self._trigger_status_update()
+
+    def _trigger_status_update(self):
+        threading.Thread(target=self._check_running_statuses_thread, daemon=True).start()
+        
+    def _check_running_statuses_thread(self):
+        try:
+            res = subprocess.run(["tasklist"], capture_output=True, text=True, creationflags=CREATE_NO_WINDOW)
+            running_tasks = res.stdout.lower()
+            
+            for exe_path, lbl in self.running_status_labels.items():
+                if not lbl.winfo_exists(): continue
+                if exe_path.name.lower() in running_tasks:
+                    self.after(0, lambda l=lbl: l.configure(text="Running", text_color="#28a745"))
+                else:
+                    self.after(0, lambda l=lbl: l.configure(text=""))
+        except:
+            pass
+
+
+    def edit_generated_game(self):
+        if not self.selected_generated_exe: return
+        
+        old_exe = self.selected_generated_exe
+        old_txt = old_exe.parent / f"{old_exe.stem}.txt"
+        
+        current_path = str(old_exe.relative_to(self.base_dir)).replace("\\", "/")
+        current_name = ""
+        if old_txt.exists():
+            current_name = old_txt.read_text(encoding='utf-8').strip()
+
+        dialog = EditGameDialog(self, current_name, current_path)
+        self.wait_window(dialog)
+
+        new_name = dialog.result_name
+        new_path = dialog.result_path
+
+        if new_path is not None and new_name is not None:
+            if not new_path.lower().endswith(".exe"): new_path += ".exe"
+            
+            is_valid, msg = self.is_valid_path(new_path)
+            if not is_valid:
+                messagebox.showerror("Invalid Path", f"The new path is invalid:\n{msg}")
+                return
+
+            try:
+                cmd = ["tasklist", "/FI", f"IMAGENAME eq {old_exe.name}"]
+                res = subprocess.run(cmd, capture_output=True, text=True, creationflags=CREATE_NO_WINDOW)
+                if old_exe.name.lower() in res.stdout.lower():
+                    messagebox.showwarning("In Use", "Game is currently running. Close it before editing.")
+                    return
+            except: pass
+
+            self._update_status("Applying edits...", "orange")
+            self.update()
+
+            new_exe_path = self.base_dir / new_path
+            success = self._compile_dummy_exe(new_exe_path, new_path, new_name)
+            
+            if success:
+                if old_exe != new_exe_path:
+                    try: 
+                        old_exe.unlink(missing_ok=True)
+                        old_txt.unlink(missing_ok=True)
+                    except: pass
+                self._update_status("Game updated successfully.", "green")
+                self.refresh_exe_list(auto_select_path=new_exe_path)
+            else:
+                self._update_status("Failed to apply edits.", "red")
+
+    def delete_game(self):
+        if not self.selected_generated_exe: return
+        exe = self.selected_generated_exe
+        txt = exe.parent / f"{exe.stem}.txt"
+
+        if not messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete this game?\n\n{exe.name}"):
+            return
+
+        try:
+            cmd = ["tasklist", "/FI", f"IMAGENAME eq {exe.name}"]
+            res = subprocess.run(cmd, capture_output=True, text=True, creationflags=CREATE_NO_WINDOW)
+            if exe.name.lower() in res.stdout.lower():
+                messagebox.showwarning("In Use", "Game is running. Close it before deleting.")
+                return
+        except: pass
+
+        try:
+            exe.unlink(missing_ok=True)
+            txt.unlink(missing_ok=True)
+            self._update_status(f"Deleted: {exe.name}", "gray")
+            self.refresh_exe_list()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to delete:\n{e}")
+
+    # ==================== UTILS ====================
+    def _update_status(self, msg, color):
+        if color == "green": c = "#28a745"
+        elif color == "red": c = "#dc3545"
+        elif color == "orange": c = "#ffc107"
+        else: c = "gray"
+        self.status_label.configure(text=msg, text_color=c)
 
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = DummyExeApp(root)
-    root.mainloop()
+    app = DummyExeApp()
+    app.mainloop()
