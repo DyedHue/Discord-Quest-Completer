@@ -1,30 +1,24 @@
-<img width="1400" height="818" alt="Illustratifddfon" src="https://github.com/user-attachments/assets/af963964-9885-4ae9-b5a7-a0f91884e69d" />
+<img width="1717" height="850" alt="image" src="https://github.com/user-attachments/assets/f181bb22-d5d5-44df-8ba2-09562000e071" />
 
 # What is it?  
-Discord detects you playing a game as long as an exe is running from the path where the game would be at with the same exe name.  
-With this knowledge, you can complete Discord's 'play' quests without installing the game/app by creating the folders and putting in a dummy exe.  
-**This app helps you automate the task of creating a dummy exe in your desired path and run it.**  
-  
-For example, Wuthering waves' exe path is:  
-any path\ `Wuthering Waves Game\Client\Binaries\Win64\Client-Win64-Shipping.exe`.  
-You just have to input this path and the app will create the folders with a dummy exe inside of:  
-The app's directory\Discord Quest Completer\DQC Game Folders\\..
+For detecting a valid game, Discord only checks the name of the exe that you are running and a few parent folders.  
+So, you can just create that game's path structure and run the exe to complete discord's play-quests. (e.g, `zenlesszonezero game/zenlesszonezero.exe`)  
+>[!NOTE]
+>**This app helps you automate the task of finding the correct path and creating a dummy exe there and run it easily.**  
 
 # How to use
-1. Fill in the EXE Path field with the proper path structure of the game. ([How to find path?](#How-to-find-path))  
-e.g., `Where Winds Meet/Engine/Binaries/Win64/wwm.exe`  
-2. Click 'Create Executable' to generate a dummy game.  
-3. Click 'Start' from your list of games and the quest should start progressing.
+## Method 1: Auto
+1. Find your desired game in the Search bar and select it (You can also choose from multiple valid paths or go with the default)
+2. Click Create Game to create a dummy game based on that game. Then you can select the game from your list and click Run.
+   OR, Press Enter to create and run.
 
-# How to find path
-You can type the name of a game in the "Search and auto fill fields" section and click 'Search and fill'.  
-This will search for the game's path from your [local database](#Local-Database) and Steam and auto fill the Name and EXE Path fields if found.  
-If you can't find the correct path this way, you can try searching on the r/DiscordQuests subreddit or Google from the links on the app.
+A new window will open and your quest should start progressing. Keep the window open to progress the quest.
+## Method 2: Manual
+1. In the "Manual Creation" section, type in the path of the game you want to run. (e.g, `zenlesszonezero game/zenlesszonezero.exe`)  
+   (This will be created in `Discord Quest Completer/DQC Game Folders/[your path]`)
+2. Give it a name to identify it more easily later and also see that name in the Title.
+   (It doesn't matter what you name it)
+3. Click "Create Game" from the top and this game will be added to your list.
+4. Now select the game from the list and click "Run".
 
-# Local Database
-The `game-index.json` file located at the app's directory is your local database.
-- It's taken from https://www.reddit.com/r/DiscordQuests/wiki/game-index.json  
-- It does NOT auto update as of yet.  
-- You have to manually update it like this:
-    1. Go to the page by following the link above or from the link in the app.
-    2. Press Ctrl + S and save it to the app's directory (Press the button on the app to open the directory). Replace if it already exists.
+A new window will open and your quest should start progressing. Keep the window open to progress the quest.
