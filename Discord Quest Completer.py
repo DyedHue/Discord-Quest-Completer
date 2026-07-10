@@ -58,7 +58,7 @@ class DummyExeApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Discord Quest Completer")
-        self.geometry("1100x800")
+        self.geometry("1100x700")
         self.minsize(950, 650)
 
         self.base_dir = Path.cwd() / "DQC Game Folders"
@@ -81,6 +81,60 @@ class DummyExeApp(ctk.CTk):
         self.refresh_exe_list()
 
         self.bind("<FocusIn>", self._on_focus_in)
+        self.bind("<Return>", self._on_enter_pressed)
+        self.bind("<Shift-Return>", self._on_shift_enter_pressed)
+        self.bind("<Up>", self._on_up_down)
+        self.bind("<Down>", self._on_up_down)
+        self.bind("<Shift-Up>", self._on_shift_up_down)
+        self.bind("<Shift-Down>", self._on_shift_up_down)
+        
+        self.after(100, lambda: self.search_entry.focus())
+
+    def _on_enter_pressed(self, event):
+        if "Search Mode" in self.tabview.get():
+            self.create_and_run_from_search()
+        elif "Manual Mode" in self.tabview.get():
+            exe_path = self.create_exe_manual()
+            if exe_path:
+                self.run_game_by_path(exe_path)
+
+    def _on_shift_enter_pressed(self, event):
+        if "Search Mode" in self.tabview.get():
+            self.create_from_search()
+
+    def _on_up_down(self, event):
+        if "Search Mode" not in self.tabview.get() or not self.search_results:
+            return
+        if not self.selected_search_game:
+            return
+        idx = next((i for i, g in enumerate(self.search_results) if g["name"] == self.selected_search_game), -1)
+        if event.keysym == "Up":
+            idx = max(0, idx - 1)
+        elif event.keysym == "Down":
+            idx = min(len(self.search_results) - 1, idx + 1)
+        for child in self.games_scroll.winfo_children():
+            if isinstance(child, ctk.CTkButton) and child.cget("text") == self.search_results[idx]["name"]:
+                self._select_search_game(self.search_results[idx], child)
+                break
+
+    def _on_shift_up_down(self, event):
+        if "Search Mode" not in self.tabview.get() or not self.selected_search_game:
+            return
+        game_data = next((g for g in self.search_results if g["name"] == self.selected_search_game), None)
+        if not game_data or not game_data["paths"]: return
+        idx = -1
+        if self.selected_search_path in game_data["paths"]:
+            idx = game_data["paths"].index(self.selected_search_path)
+        if event.keysym == "Up":
+            idx = max(0, idx - 1)
+        elif event.keysym == "Down":
+            idx = min(len(game_data["paths"]) - 1, idx + 1)
+        new_path = game_data["paths"][idx]
+        for lbl in self.path_labels:
+            if lbl.cget("text") == new_path:
+                frame = lbl.master
+                self._select_search_path(new_path, frame)
+                break
 
     def _init_cache(self):
         self.cache_file = Path.cwd() / "discord_cache.json"
@@ -108,51 +162,31 @@ class DummyExeApp(ctk.CTk):
             pass
 
     def setup_ui(self):
-        self.grid_columnconfigure(0, weight=8) 
-        self.grid_columnconfigure(1, weight=2)
+        self.grid_columnconfigure(0, weight=65, uniform="col") 
+        self.grid_columnconfigure(1, weight=35, uniform="col")
         self.grid_rowconfigure(0, weight=1)
 
-        # ==================== LEFT FRAME (Creation & Search) ====================
+        # ==================== LEFT FRAME (Tabs) ====================
         left_frame = ctk.CTkFrame(self, fg_color="transparent")
         left_frame.grid(row=0, column=0, sticky="nsew", padx=(15, 10), pady=15)
         
-        # --- Manual Entry Section (Boxed) ---
-        manual_container = ctk.CTkFrame(left_frame, border_width=1, border_color="gray30", fg_color="transparent")
-        manual_container.pack(fill="x", pady=(0, 15))
+        # Tab View
+        self.tabview = ctk.CTkTabview(left_frame)
+        self.tabview.pack(fill="both", expand=True)
+        
+        self.tab_auto = self.tabview.add("   Search Mode   ")
+        self.tab_manual = self.tabview.add(" Manual Mode ")
+        self.tabview.set("   Search Mode   ")
 
-        manual_header_frame = ctk.CTkFrame(manual_container, fg_color="transparent")
-        manual_header_frame.pack(fill="x", padx=15, pady=(15, 5))
+        # --- Search Mode TAB ---
+        ctk.CTkLabel(self.tab_auto, text="Search", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", padx=10, pady=(5, 5))
         
-        ctk.CTkLabel(manual_header_frame, text="Manual Creation", font=ctk.CTkFont(size=16, weight="bold")).pack(side="left")
-        self.manual_create_btn = ctk.CTkButton(manual_header_frame, text="Create Game", command=self.create_exe_manual, fg_color="#28a745", hover_color="#218838", width=120)
-        self.manual_create_btn.pack(side="right")
-
-        manual_inputs_frame = ctk.CTkFrame(manual_container, fg_color="transparent")
-        manual_inputs_frame.pack(fill="x", padx=15, pady=(0, 15))
-        
-        ctk.CTkLabel(manual_inputs_frame, text="Name (Optional):").grid(row=0, column=0, padx=(0, 10), pady=5, sticky="w")
-        self.name_entry = ctk.CTkEntry(manual_inputs_frame)
-        self.name_entry.grid(row=0, column=1, padx=0, pady=5, sticky="ew")
-        
-        ctk.CTkLabel(manual_inputs_frame, text="EXE Path:").grid(row=1, column=0, padx=(0, 10), pady=(0, 5), sticky="w")
-        self.path_entry = ctk.CTkEntry(manual_inputs_frame)
-        self.path_entry.grid(row=1, column=1, padx=0, pady=(0, 5), sticky="ew")
-        
-        manual_inputs_frame.grid_columnconfigure(1, weight=1)
-
-        # --- Search Section (Boxed) ---
-        search_container = ctk.CTkFrame(left_frame, border_width=1, border_color="gray30", fg_color="transparent")
-        search_container.pack(fill="both", expand=True)
-
-        ctk.CTkLabel(search_container, text="Search", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", padx=15, pady=(15, 5))
-        
-        self.search_entry = ctk.CTkEntry(search_container, placeholder_text="Type here to search for paths from Discord API/Steam...")
-        self.search_entry.pack(fill="x", padx=15, pady=(0, 10))
+        self.search_entry = ctk.CTkEntry(self.tab_auto, placeholder_text="Type a game name...")
+        self.search_entry.pack(fill="x", padx=10, pady=(0, 10))
         self.search_entry.bind("<KeyRelease>", self._on_search_typing)
-        self.search_entry.bind("<Return>", lambda e: self.create_and_run_from_search())
 
-        lists_frame = ctk.CTkFrame(search_container, fg_color="transparent")
-        lists_frame.pack(fill="both", expand=True, padx=15, pady=(0, 10))
+        lists_frame = ctk.CTkFrame(self.tab_auto, fg_color="transparent")
+        lists_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         lists_frame.grid_columnconfigure(0, weight=1)
         lists_frame.grid_columnconfigure(1, weight=1)
         lists_frame.grid_rowconfigure(1, weight=1)
@@ -167,20 +201,43 @@ class DummyExeApp(ctk.CTk):
         
         self.paths_scroll.bind("<Configure>", self._on_paths_scroll_resize)
 
-        search_action_frame = ctk.CTkFrame(search_container, fg_color="transparent")
-        search_action_frame.pack(fill="x", padx=15, pady=(5, 15))
+        search_action_frame = ctk.CTkFrame(self.tab_auto, fg_color="transparent")
+        search_action_frame.pack(fill="x", padx=10, pady=(5, 10))
         
-        self.edit_btn = ctk.CTkButton(search_action_frame, text="Edit in Manual Fields", command=self.copy_to_manual, fg_color="#6c757d", hover_color="#5a6268")
+        self.edit_btn = ctk.CTkButton(search_action_frame, text="Edit in Manual Fields", command=self.copy_to_manual)
         self.edit_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
         
-        self.create_search_btn = ctk.CTkButton(search_action_frame, text="Create Game", command=self.create_from_search, fg_color="#17a2b8", hover_color="#138496")
+        self.create_search_btn = ctk.CTkButton(search_action_frame, text="Create Game (Shift + Enter)", command=self.create_from_search)
         self.create_search_btn.pack(side="left", fill="x", expand=True, padx=(5, 5))
 
-        self.create_run_search_btn = ctk.CTkButton(search_action_frame, text="Create & Run (Enter)", command=self.create_and_run_from_search, fg_color="#28a745", hover_color="#218838")
+        self.create_run_search_btn = ctk.CTkButton(search_action_frame, text="Create & Run (Enter)", command=self.create_and_run_from_search)
         self.create_run_search_btn.pack(side="left", fill="x", expand=True, padx=(5, 0))
 
+        # --- Manual Mode TAB ---
+        manual_header_frame = ctk.CTkFrame(self.tab_manual, fg_color="transparent")
+        manual_header_frame.pack(fill="x", padx=10, pady=(15, 5))
+        
+        ctk.CTkLabel(manual_header_frame, text="Manual Mode", font=ctk.CTkFont(size=16, weight="bold")).pack(side="left")
+
+        manual_inputs_frame = ctk.CTkFrame(self.tab_manual, fg_color="transparent")
+        manual_inputs_frame.pack(fill="x", padx=10, pady=(10, 5))
+        
+        ctk.CTkLabel(manual_inputs_frame, text="Name (Optional):").grid(row=0, column=0, padx=(0, 10), pady=5, sticky="w")
+        self.name_entry = ctk.CTkEntry(manual_inputs_frame)
+        self.name_entry.grid(row=0, column=1, padx=0, pady=5, sticky="ew")
+        
+        ctk.CTkLabel(manual_inputs_frame, text="EXE Path:").grid(row=1, column=0, padx=(0, 10), pady=(0, 5), sticky="w")
+        self.path_entry = ctk.CTkEntry(manual_inputs_frame)
+        self.path_entry.grid(row=1, column=1, padx=0, pady=(0, 5), sticky="ew")
+        
+        manual_inputs_frame.grid_columnconfigure(1, weight=1)
+
+        self.manual_create_btn = ctk.CTkButton(self.tab_manual, text="Create Game", command=self.create_exe_manual, fg_color="#28a745", hover_color="#218838", width=200)
+        self.manual_create_btn.pack(pady=(10, 15))
+
+        # Status Label (Placed below Tabs so it's always visible)
         self.status_label = ctk.CTkLabel(left_frame, text="Ready.", text_color="gray")
-        self.status_label.pack(anchor="w", pady=(5, 0))
+        self.status_label.pack(anchor="w", padx=10, pady=(5, 0))
 
 
         # ==================== RIGHT FRAME (Generated Games) ====================
@@ -195,15 +252,36 @@ class DummyExeApp(ctk.CTk):
         gen_action_frame = ctk.CTkFrame(right_frame, fg_color="transparent")
         gen_action_frame.pack(fill="x")
         
-        self.run_btn = ctk.CTkButton(gen_action_frame, text="Run", command=self.run_game, fg_color="#007bff", hover_color="#0069d9", state="disabled")
+        self.run_btn = ctk.CTkButton(gen_action_frame, text="Run", command=self.run_game)
         self.run_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
-        self.edit_gen_btn = ctk.CTkButton(gen_action_frame, text="Edit", command=self.edit_generated_game, fg_color="#ffc107", hover_color="#e0a800", text_color="black", state="disabled")
+        self.edit_gen_btn = ctk.CTkButton(gen_action_frame, text="Edit", command=self.edit_generated_game)
         self.edit_gen_btn.pack(side="left", fill="x", expand=True, padx=(5, 5))
 
-        self.del_btn = ctk.CTkButton(gen_action_frame, text="Delete", command=self.delete_game, fg_color="#dc3545", hover_color="#c82333", state="disabled")
+        self.del_btn = ctk.CTkButton(gen_action_frame, text="Delete", command=self.delete_game)
         self.del_btn.pack(side="left", fill="x", expand=True, padx=(5, 0))
 
+        # Initialize button states (Greyed out until selection)
+        self._toggle_search_action_buttons(False)
+        self._toggle_gen_action_buttons(False)
+
+    # ==================== BUTTON COLOR STATES ====================
+    def _set_btn_state(self, btn, is_active, fg_color, hover_color, text_color="white"):
+        """Dynamically applies vibrant colors when active, and flat grey when disabled."""
+        if is_active:
+            btn.configure(state="normal", fg_color=fg_color, hover_color=hover_color, text_color=text_color)
+        else:
+            btn.configure(state="disabled", fg_color="gray25", text_color="gray55")
+
+    def _toggle_search_action_buttons(self, state):
+        self._set_btn_state(self.edit_btn, state, "#6c757d", "#5a6268")
+        self._set_btn_state(self.create_search_btn, state, "#17a2b8", "#138496")
+        self._set_btn_state(self.create_run_search_btn, state, "#28a745", "#218838")
+
+    def _toggle_gen_action_buttons(self, state):
+        self._set_btn_state(self.run_btn, state, "#007bff", "#0069d9")
+        self._set_btn_state(self.edit_gen_btn, state, "#ffc107", "#e0a800", text_color="black" if state else "gray55")
+        self._set_btn_state(self.del_btn, state, "#dc3545", "#c82333")
 
     # ==================== VALIDATION LOGIC ====================
     def is_valid_path(self, path_str):
@@ -217,9 +295,7 @@ class DummyExeApp(ctk.CTk):
 
     # ==================== SEARCH LOGIC ====================
     def normalize_string(self, text):
-        """Strips symbols, punctuation, and extra spaces for smarter search matching."""
         if not text: return ""
-        # Lowercase, replace non-alphanumeric with space, collapse multi-spaces
         clean = re.sub(r'[^a-z0-9\s]', ' ', text.lower())
         return re.sub(r'\s+', ' ', clean).strip()
 
@@ -241,6 +317,7 @@ class DummyExeApp(ctk.CTk):
             self.search_results.clear()
             self.selected_search_game = None
             self.selected_search_path = None
+            self._toggle_search_action_buttons(False)
             
             if query:
                 self._update_status("Type at least 3 characters to search...", "gray")
@@ -249,6 +326,7 @@ class DummyExeApp(ctk.CTk):
             return
 
         self.status_label.configure(text=f"Searching Discord API for '{query}'...", text_color="orange")
+        self._toggle_search_action_buttons(False)
         
         for widget in self.games_scroll.winfo_children(): widget.destroy()
         for widget in self.paths_scroll.winfo_children(): widget.destroy()
@@ -276,7 +354,6 @@ class DummyExeApp(ctk.CTk):
                 name = app.get("name", "")
                 aliases = app.get("aliases", [])
                 
-                # Check normalized main name and all aliases
                 search_targets = [name] + aliases
                 matched = False
                 
@@ -300,63 +377,14 @@ class DummyExeApp(ctk.CTk):
                         matches.append({"name": name, "norm_name": self.normalize_string(name), "paths": clean_paths})
 
             if matches:
-                # Sort best matches: Exact length matches float to top
                 matches.sort(key=lambda x: abs(len(x["norm_name"]) - len(query_norm)))
                 self.search_results = matches
                 self.after(0, self._populate_games_list)
             else:
-                self.after(0, lambda: self._fallback_steam_search(query))
+                self.after(0, lambda: self._update_status(f"Game '{query}' not found in Discord API.", "red"))
 
         except Exception as e:
             self.after(0, lambda: self._update_status("Please install 'requests' via terminal for live search.", "red"))
-
-    def _fallback_steam_search(self, query):
-        self.status_label.configure(text=f"Not found in Discord. Searching Steam...", text_color="orange")
-        try:
-            import requests
-            from steam.client import SteamClient
-            
-            search_url = f'https://store.steampowered.com/api/storesearch/?term={query}&l=english&cc=US'
-            search_resp = requests.get(search_url, timeout=10).json()
-
-            if not search_resp.get('items'):
-                self._update_status(f"Game '{query}' not found anywhere.", "red")
-                return
-
-            game_data = search_resp['items'][0]
-            app_id = game_data['id']
-            official_name = game_data['name']
-
-            self.status_label.configure(text=f"Found '{official_name}' on Steam. Fetching path...", text_color="orange")
-
-            client = SteamClient()
-            try:
-                client.anonymous_login()
-                product_info = client.get_product_info(apps=[app_id])
-                
-                app_config = product_info['apps'][app_id].get('config', {})
-                install_dir = app_config.get('installdir', official_name)
-                
-                launch_data = app_config.get('launch', {})
-                exe_rel_path = 'unknown.exe'
-                if launch_data:
-                    first_launch = list(launch_data.values())[0]
-                    exe_rel_path = first_launch.get('executable', 'unknown.exe')
-
-                final_path = f"common/{install_dir}/{exe_rel_path}".replace("\\", "/")
-                
-                valid, _ = self.is_valid_path(final_path)
-                if not valid:
-                    if not final_path.lower().endswith(".exe"): final_path += ".exe"
-
-                self.search_results = [{"name": official_name, "paths": [final_path]}]
-                self.after(0, self._populate_games_list)
-                
-            finally:
-                client.disconnect()
-                
-        except Exception as e:
-            self._update_status("Please install 'requests' and 'steam' to search Steam API.", "red")
 
     def _populate_games_list(self):
         self._update_status("Search complete.", "green")
@@ -410,6 +438,9 @@ class DummyExeApp(ctk.CTk):
             self.active_search_path_btn.configure(fg_color="transparent")
         active_frame.configure(fg_color=("#3b8ed0", "#1f538d"))
         self.active_search_path_btn = active_frame
+        
+        # Now that a path is selected, enable the bottom buttons
+        self._toggle_search_action_buttons(True)
 
     def _on_paths_scroll_resize(self, event):
         if hasattr(self, '_resize_timer') and self._resize_timer:
@@ -426,23 +457,23 @@ class DummyExeApp(ctk.CTk):
     # ==================== CREATION LOGIC ====================
     def copy_to_manual(self):
         if not self.selected_search_game or not self.selected_search_path:
-            messagebox.showinfo("Selection Required", "Please select a game and path from the search results first.")
             return
         self.name_entry.delete(0, tk.END)
         self.name_entry.insert(0, self.selected_search_game)
         self.path_entry.delete(0, tk.END)
         self.path_entry.insert(0, self.selected_search_path)
+        
+        # Switch to Manual tab seamlessly
+        self.tabview.set(" Manual Mode ")
         self._update_status("Copied to manual entry.", "green")
 
     def create_from_search(self):
         if not self.selected_search_game or not self.selected_search_path:
-            messagebox.showinfo("Selection Required", "Please select a game and path from the search results first.")
             return
         self._process_creation(self.selected_search_game, self.selected_search_path)
 
     def create_and_run_from_search(self):
         if not self.selected_search_game or not self.selected_search_path:
-            messagebox.showinfo("Selection Required", "Please select a game and path from the search results first.")
             return
         exe_path = self._process_creation(self.selected_search_game, self.selected_search_path)
         if exe_path:
@@ -453,8 +484,8 @@ class DummyExeApp(ctk.CTk):
         path = self.path_entry.get().strip()
         if not path:
             messagebox.showerror("Error", "Please enter an EXE Path manually.")
-            return
-        self._process_creation(name, path)
+            return None
+        return self._process_creation(name, path)
 
     def _process_creation(self, game_name, rel_path):
         if not rel_path.lower().endswith(".exe"): rel_path += ".exe"
@@ -560,7 +591,7 @@ class DummyExeApp(ctk.CTk):
         self.selected_generated_exe = None
         self.active_gen_game_frame = None
         self.running_status_labels.clear()
-        self._toggle_action_buttons(False)
+        self._toggle_gen_action_buttons(False)
 
         if not exes:
             ctk.CTkLabel(self.generated_scroll, text="No executables found.\nCreate one from the left.", text_color="gray").pack(pady=20)
@@ -582,7 +613,6 @@ class DummyExeApp(ctk.CTk):
             item_frame = ctk.CTkFrame(self.generated_scroll, border_width=1, border_color="gray30", fg_color="transparent", corner_radius=6)
             item_frame.pack(fill="x", pady=3, padx=2)
             
-            # --- Top row: Name + Running Status ---
             name_row = ctk.CTkFrame(item_frame, fg_color="transparent")
             name_row.pack(fill="x", padx=10, pady=(5, 0))
 
@@ -593,7 +623,6 @@ class DummyExeApp(ctk.CTk):
             status_lbl.pack(side="left", padx=(10, 0))
             self.running_status_labels[exe_path] = status_lbl
 
-            # --- Bottom row: Path ---
             path_lbl = ctk.CTkLabel(item_frame, text=rel_path, font=ctk.CTkFont(size=11), text_color="gray60", anchor="w", cursor="hand2")
             path_lbl.pack(fill="x", padx=10, pady=(0, 5))
 
@@ -617,13 +646,8 @@ class DummyExeApp(ctk.CTk):
         active_frame.configure(fg_color=("#3b8ed0", "#1f538d"))
         self.active_gen_game_frame = active_frame
         
-        self._toggle_action_buttons(True)
+        self._toggle_gen_action_buttons(True)
 
-    def _toggle_action_buttons(self, state):
-        s = "normal" if state else "disabled"
-        self.run_btn.configure(state=s)
-        self.edit_gen_btn.configure(state=s)
-        self.del_btn.configure(state=s)
 
     def run_game(self):
         if not self.selected_generated_exe or not self.selected_generated_exe.exists():
@@ -669,7 +693,6 @@ class DummyExeApp(ctk.CTk):
                     self.after(0, lambda l=lbl: l.configure(text=""))
         except:
             pass
-
 
     def edit_generated_game(self):
         if not self.selected_generated_exe: return
