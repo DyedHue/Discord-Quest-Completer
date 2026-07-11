@@ -1,3 +1,27 @@
-/*
-!.gitignore
-!Discord Quest Completer.py
+# Build artifacts
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider
+.idea/
+
+# DQC runtime generated folders
+"DQC Game Folders"/
+
+# Temporary files
+*.tmp
+*.log
+
+# Publish output
+publish/
+
+# Others
+*.DS_Store
+Thumbs.db

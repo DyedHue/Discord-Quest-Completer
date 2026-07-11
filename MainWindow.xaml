@@ -1,0 +1,248 @@
+﻿<Window x:Class="DiscordQuestCompleter.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Discord Quest Completer" Height="750" Width="1100" Background="#1b1c1f" Foreground="#dbdee1"
+        Loaded="Window_Loaded" PreviewKeyDown="Window_PreviewKeyDown">
+
+	<Window.Resources>
+		<!-- Button Style -->
+		<Style TargetType="Button">
+			<Setter Property="Background" Value="#5865f2"/>
+			<Setter Property="Foreground" Value="White"/>
+			<Setter Property="Padding" Value="10,8"/>
+			<Setter Property="BorderThickness" Value="0"/>
+			<Setter Property="FontWeight" Value="SemiBold"/>
+			<Setter Property="Cursor" Value="Hand"/>
+		</Style>
+		<!-- TextBox Style -->
+		<Style TargetType="TextBox">
+			<Setter Property="Background" Value="#1b1c1f"/>
+			<Setter Property="Foreground" Value="#dbdee1"/>
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="BorderBrush" Value="#1b1c1f"/>
+			<Setter Property="Padding" Value="8"/>
+		</Style>
+		<!-- ListBox Style -->
+		<Style TargetType="ListBox">
+			<Setter Property="Background" Value="#1b1c1f"/>
+			<Setter Property="Foreground" Value="#dbdee1"/>
+			<Setter Property="BorderThickness" Value="0"/>
+			<Setter Property="Padding" Value="5"/>
+		</Style>
+
+		<!-- TabItem Style for Darker/Lighter Background -->
+		<Style TargetType="TabItem">
+			<Setter Property="Background" Value="#1b1c1f"/>
+			<Setter Property="Foreground" Value="#949ba4"/>
+			<Setter Property="Padding" Value="20,10"/>
+			<Setter Property="BorderThickness" Value="0"/>
+			<Setter Property="Margin" Value="0,0,2,0"/>
+			<Setter Property="FontWeight" Value="SemiBold"/>
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="TabItem">
+						<Border x:Name="Border" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" CornerRadius="6,6,0,0">
+							<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" ContentSource="Header"/>
+						</Border>
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsSelected" Value="True">
+								<Setter TargetName="Border" Property="Background" Value="#292a2e"/>
+								<Setter Property="Foreground" Value="White"/>
+							</Trigger>
+							<MultiTrigger>
+								<MultiTrigger.Conditions>
+									<Condition SourceName="Border" Property="IsMouseOver" Value="True"/>
+									<Condition Property="IsSelected" Value="False"/>
+								</MultiTrigger.Conditions>
+								<Setter TargetName="Border" Property="Background" Value="#18191c"/>
+								<Setter Property="Foreground" Value="White"/>
+							</MultiTrigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+
+		<!-- Custom ListBoxItem for Generated Games (Bigger, Borders, Selectable) -->
+		<Style x:Key="GeneratedGameItemStyle" TargetType="ListBoxItem">
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="Foreground" Value="#dbdee1"/>
+			<Setter Property="Tag" Value="#949ba4"/>
+			<Setter Property="Padding" Value="0"/>
+			<Setter Property="Margin" Value="0,0,0,8"/>
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="ListBoxItem">
+						<Border BorderBrush="#3f4147" BorderThickness="1" CornerRadius="6" Background="{TemplateBinding Background}" Padding="15,10">
+							<ContentPresenter/>
+						</Border>
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsSelected" Value="True">
+								<Setter Property="Background" Value="#3b8ed0"/>
+								<Setter Property="Foreground" Value="White"/>
+								<Setter Property="Tag" Value="#f0f0f0"/>
+							</Trigger>
+							<MultiTrigger>
+								<MultiTrigger.Conditions>
+									<Condition Property="IsMouseOver" Value="True"/>
+									<Condition Property="IsSelected" Value="False"/>
+								</MultiTrigger.Conditions>
+								<Setter Property="Background" Value="#313338"/>
+							</MultiTrigger>
+							<MultiTrigger>
+								<MultiTrigger.Conditions>
+									<Condition Property="IsMouseOver" Value="True"/>
+									<Condition Property="IsSelected" Value="True"/>
+								</MultiTrigger.Conditions>
+								<Setter Property="Background" Value="#2c78b3"/>
+							</MultiTrigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+	</Window.Resources>
+
+	<Grid Margin="15">
+		<Grid.ColumnDefinitions>
+			<ColumnDefinition Width="65*"/>
+			<ColumnDefinition Width="35*"/>
+		</Grid.ColumnDefinitions>
+
+		<!-- Left Panel: Tabs -->
+		<TabControl x:Name="Tabs" Grid.Column="0" Margin="0,0,15,20" Background="#292a2e" BorderThickness="0">
+			<!-- Auto Search Tab -->
+			<TabItem Header="Search Mode">
+				<Grid Margin="15">
+					<Grid.RowDefinitions>
+						<RowDefinition Height="Auto"/>
+						<RowDefinition Height="*"/>
+						<RowDefinition Height="Auto"/>
+					</Grid.RowDefinitions>
+
+					<Grid Grid.Row="0" Margin="0,0,0,15">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*" />
+							<ColumnDefinition Width="Auto" />
+						</Grid.ColumnDefinitions>
+
+						<TextBox x:Name="SearchBox" Grid.Column="0" 
+								 Text="Type at least 3 characters to search..." Foreground="Gray"
+								 GotFocus="SearchBox_GotFocus" LostFocus="SearchBox_LostFocus"
+								 TextChanged="SearchBox_TextChanged"/>
+
+						<Button x:Name="RefetchButton" Grid.Column="1" Margin="8,0,0,0" Width="36" Height="32" Click="RefetchButton_Click"
+								ToolTip="Refetch search database? (~11MB download)">
+							<TextBlock Text="⟳" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+						</Button>
+					</Grid>
+
+					<Grid Grid.Row="1">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="1*"/>
+							<ColumnDefinition Width="1*"/>
+						</Grid.ColumnDefinitions>
+
+						<DockPanel Grid.Column="0" Margin="0,0,8,0">
+							<TextBlock Text="Select Game:" FontWeight="Bold" DockPanel.Dock="Top" Margin="0,0,0,5"/>
+							<ListBox x:Name="GamesList" DisplayMemberPath="Name" SelectionChanged="GamesList_SelectionChanged"/>
+						</DockPanel>
+
+						<DockPanel Grid.Column="1" Margin="8,0,0,0">
+							<TextBlock Text="Select Path:" FontWeight="Bold" DockPanel.Dock="Top" Margin="0,0,0,5"/>
+							<ListBox x:Name="PathsList"/>
+						</DockPanel>
+					</Grid>
+
+					<!-- Search Action Buttons -->
+					<Grid Grid.Row="2" Margin="0,15,0,0">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*"/>
+							<ColumnDefinition Width="*"/>
+							<ColumnDefinition Width="*"/>
+						</Grid.ColumnDefinitions>
+						<Button Grid.Column="0" Margin="0,0,5,0" Content="Edit in Manual Fields" Background="#6c757d" Click="CopyToManual_Click"/>
+						<Button Grid.Column="1" Margin="5,0,5,0" Content="Create Game&#x0a;(Shift+Enter)" Background="#17a2b8" Click="CreateGame_Click" Padding="10,2"/>
+						<Button Grid.Column="2" Margin="5,0,0,0" Content="Create &amp; Run&#x0a;(Enter)" Background="#3ba55c" Click="CreateAndRun_Click" Padding="10,2"/>
+					</Grid>
+				</Grid>
+			</TabItem>
+
+			<!-- Manual Tab -->
+			<TabItem Header="Manual Mode">
+				<StackPanel Margin="15">
+					<TextBlock Text="Game Name (Optional):" Margin="0,0,0,5" FontWeight="Bold"/>
+					<TextBox x:Name="ManualName" Margin="0,0,0,15"/>
+
+					<TextBlock Text="EXE Path (Required):" Margin="0,0,0,5" FontWeight="Bold"/>
+					<TextBox x:Name="ManualPath" Margin="0,0,0,20"/>
+
+					<Button Content="Create Game" Background="#3ba55c" Click="CreateGame_Click" Padding="10,12"/>
+				</StackPanel>
+			</TabItem>
+		</TabControl>
+
+		<!-- Right Panel: Generated Games -->
+		<Border Grid.Column="1" Margin="0,0,0,20" Background="#292a2e" CornerRadius="6" Padding="15">
+			<Grid>
+				<Grid.RowDefinitions>
+					<RowDefinition Height="Auto"/>
+					<RowDefinition Height="*"/>
+					<RowDefinition Height="Auto"/>
+				</Grid.RowDefinitions>
+
+				<TextBlock Grid.Row="0" Text="Generated Games" FontSize="18" FontWeight="Bold" Margin="0,0,0,10"/>
+
+				<ListBox x:Name="GeneratedGamesList" Grid.Row="1" Background="Transparent" BorderThickness="0" 
+                         ItemContainerStyle="{StaticResource GeneratedGameItemStyle}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         SelectionChanged="GeneratedGamesList_SelectionChanged">
+					<ListBox.ItemTemplate>
+						<DataTemplate>
+							<Grid>
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="*"/>
+									<ColumnDefinition Width="Auto"/>
+								</Grid.ColumnDefinitions>
+								<StackPanel Grid.Column="0">
+									<TextBlock Text="{Binding DisplayName}" FontWeight="Bold" FontSize="15" Margin="0,0,0,4" Foreground="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Foreground}"/>
+									<TextBlock Text="{Binding RelativePath}" FontSize="12" Foreground="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Tag}" TextWrapping="Wrap"/>
+								</StackPanel>
+								<Border Grid.Column="1" CornerRadius="4" Padding="6,2" VerticalAlignment="Center" Margin="10,0,0,0">
+									<Border.Style>
+										<Style TargetType="Border">
+											<Setter Property="Visibility" Value="Collapsed"/>
+											<Setter Property="Background" Value="#23a559"/>
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding IsRunning}" Value="True">
+													<Setter Property="Visibility" Value="Visible"/>
+												</DataTrigger>
+												<DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=IsSelected}" Value="True">
+													<Setter Property="Background" Value="#1a7c43"/>
+												</DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Border.Style>
+									<TextBlock Text="RUNNING" Foreground="White" FontWeight="Bold" FontSize="10" />
+								</Border>
+							</Grid>
+						</DataTemplate>
+					</ListBox.ItemTemplate>
+				</ListBox>
+
+				<!-- Generated Games Action Buttons -->
+				<Grid Grid.Row="2" Margin="0,15,0,0">
+					<UniformGrid x:Name="NotRunningButtons" Columns="3" Visibility="Visible">
+						<Button Content="Run" Margin="0,0,5,0" Background="#007bff" Click="RunGame_Click"/>
+						<Button Content="Edit" Margin="5,0,5,0" Background="#ffc107" Foreground="Black" Click="EditGame_Click"/>
+						<Button Content="Delete" Margin="5,0,0,0" Background="#ed4245" Click="DeleteGame_Click"/>
+					</UniformGrid>
+					<Button x:Name="StopButton" Content="Stop" Background="#ed4245" Visibility="Collapsed" Click="StopGame_Click"/>
+				</Grid>
+			</Grid>
+		</Border>
+
+		<!-- Footer Status -->
+		<TextBlock x:Name="StatusText" Grid.Column="0" Grid.ColumnSpan="2" 
+                   VerticalAlignment="Bottom" Foreground="#949ba4" FontWeight="SemiBold"/>
+	</Grid>
+</Window>
