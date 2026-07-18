@@ -15,6 +15,9 @@ obj/
 # DQC runtime generated folders
 "DQC Game Folders"/
 
+# Local settings (contains the user's own Discord token)
+dqc_settings.json
+
 # Temporary files
 *.tmp
 *.log

@@ -14,6 +14,10 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using MessageBox = System.Windows.MessageBox;
+using Color = System.Windows.Media.Color;
+using ColorConverter = System.Windows.Media.ColorConverter;
+using Brushes = System.Windows.Media.Brushes;
 
 namespace DiscordQuestCompleter
 {
@@ -49,6 +53,18 @@ namespace DiscordQuestCompleter
 		}
 	}
 
+	public class QuestListItem
+	{
+		public DetectedQuest Quest { get; set; } = new();
+		public string DisplayName { get; set; } = "";
+		public bool HasMatch { get; set; }
+		public bool IsTracked { get; set; }
+		public string ProgressText => $"{FormatMinutes(Quest.ProgressSeconds)} / {FormatMinutes(Quest.TargetSeconds)}";
+		public string StatusText => Quest.IsCompleted ? "Completed" : (IsTracked ? "Tracking" : (HasMatch ? "Ready" : "No local match"));
+
+		private static string FormatMinutes(double seconds) => $"{Math.Round(seconds / 60)}m";
+	}
+
 	public partial class MainWindow : Window
 	{
 		private List<DiscordGame> _discordCache = new();
@@ -57,6 +73,14 @@ namespace DiscordQuestCompleter
 		private bool _isDatabaseLoaded = false;
 		private bool _isSearchPlaceholder = true;
 		private DispatcherTimer _processTimer;
+
+		private DispatcherTimer _questTimer;
+		private List<QuestListItem> _questItems = new();
+		// questId -> full path of the dummy exe this app auto-created & is tracking for that quest.
+		private readonly Dictionary<string, string> _trackedQuestGames = new();
+
+		private System.Windows.Forms.NotifyIcon? _trayIcon;
+		private bool _isExiting = false;
 
 		public MainWindow()
 		{
@@ -68,10 +92,63 @@ namespace DiscordQuestCompleter
 			// Try to load local database if present. Do not auto-fetch from network to save users' data.
 			LoadLocalDatabase();
 
+			TokenBox.Text = Settings.LoadToken();
+
+			InitializeTrayIcon();
+
 			_processTimer = new DispatcherTimer();
 			_processTimer.Interval = TimeSpan.FromSeconds(1);
 			_processTimer.Tick += ProcessTimer_Tick;
 			_processTimer.Start();
+
+			_questTimer = new DispatcherTimer();
+			_questTimer.Interval = TimeSpan.FromSeconds(30);
+			_questTimer.Tick += async (s, e) => await RefreshQuestsAsync();
+			_questTimer.Start();
+		}
+
+		private void InitializeTrayIcon()
+		{
+			_trayIcon = new System.Windows.Forms.NotifyIcon
+			{
+				Icon = System.Drawing.SystemIcons.Application,
+				Visible = true,
+				Text = "Discord Quest Completer"
+			};
+
+			var menu = new System.Windows.Forms.ContextMenuStrip();
+			menu.Items.Add("Show", null, (s, e) => ShowFromTray());
+			menu.Items.Add("Exit", null, (s, e) =>
+			{
+				_isExiting = true;
+				_trayIcon.Visible = false;
+				this.Close();
+			});
+			_trayIcon.ContextMenuStrip = menu;
+			_trayIcon.DoubleClick += (s, e) => ShowFromTray();
+		}
+
+		private void ShowFromTray()
+		{
+			this.Show();
+			this.WindowState = WindowState.Normal;
+			this.Activate();
+		}
+
+		protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+		{
+			if (_isExiting)
+			{
+				_trayIcon?.Dispose();
+				base.OnClosing(e);
+				return;
+			}
+
+			e.Cancel = true;
+			this.Hide();
+			_trayIcon?.ShowBalloonTip(2000, "Discord Quest Completer",
+				"Still running in the background. Right-click the tray icon to exit.",
+				System.Windows.Forms.ToolTipIcon.Info);
 		}
 
 		private void ProcessTimer_Tick(object sender, EventArgs e)
@@ -104,7 +181,11 @@ namespace DiscordQuestCompleter
 
 		private void UpdateRunningStatus()
 		{
-			if (GeneratedGamesList.Items.Count == 0) return;
+			if (GeneratedGamesList.Items.Count == 0)
+			{
+				if (_trayIcon != null) _trayIcon.Text = "Discord Quest Completer";
+				return;
+			}
 
 			bool anyChanged = false;
 			var runningPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -127,14 +208,23 @@ namespace DiscordQuestCompleter
 			}
 			catch { }
 
+			int runningCount = 0;
 			foreach (GeneratedGame game in GeneratedGamesList.Items)
 			{
 				bool isRunning = runningPaths.Contains(game.FullPath);
+				if (isRunning) runningCount++;
 				if (game.IsRunning != isRunning)
 				{
 					game.IsRunning = isRunning;
 					anyChanged = true;
 				}
+			}
+
+			if (_trayIcon != null)
+			{
+				_trayIcon.Text = runningCount > 0
+					? $"Discord Quest Completer - {runningCount} running"
+					: "Discord Quest Completer";
 			}
 
 			if (anyChanged)
@@ -152,7 +242,7 @@ namespace DiscordQuestCompleter
 			}
 		}
 
-		private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+		private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
 		{
 			// Disable global keyboard shortcuts when Manual Creation tab is selected
 			if (Tabs.SelectedIndex == 1)
@@ -689,23 +779,7 @@ namespace DiscordQuestCompleter
 		{
 			if (GeneratedGamesList.SelectedItem is GeneratedGame game)
 			{
-				try
-				{
-					var processes = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(game.FullPath));
-					foreach (var p in processes)
-					{
-						try
-						{
-							if (p.MainModule?.FileName.Equals(game.FullPath, StringComparison.OrdinalIgnoreCase) == true)
-							{
-								p.Kill();
-							}
-						}
-						catch { }
-					}
-				}
-				catch { }
-
+				KillProcessAtPath(game.FullPath);
 				Task.Delay(500).ContinueWith(_ => Dispatcher.Invoke(UpdateRunningStatus));
 			}
 		}
@@ -736,10 +810,15 @@ namespace DiscordQuestCompleter
 					return;
 				}
 
+				// Whether Discord's quest detection still counts progress for a minimized
+				// window is unverified (reports differ), so default to the known-working
+				// visible window and only minimize if the user opts in via the checkbox.
+				bool minimize = MinimizeOnRunCheck.IsChecked == true;
 				Process.Start(new ProcessStartInfo
 				{
 					FileName = fullPath,
-					UseShellExecute = true
+					UseShellExecute = true,
+					WindowStyle = minimize ? ProcessWindowStyle.Minimized : ProcessWindowStyle.Normal
 				});
 			UpdateStatus("Started process: " + processName, StatusLevel.Success);
 				Task.Delay(500).ContinueWith(_ => Dispatcher.Invoke(UpdateRunningStatus));
@@ -769,6 +848,128 @@ namespace DiscordQuestCompleter
 			}
 			catch { }
 			return false;
+		}
+
+		// ---- Quests: auto-detect active quests and auto-close on completion ----
+
+		private void SaveToken_Click(object sender, RoutedEventArgs e)
+		{
+			Settings.SaveToken(TokenBox.Text.Trim());
+			UpdateStatus("Discord token saved.", StatusLevel.Success);
+		}
+
+		private async void RefreshQuests_Click(object sender, RoutedEventArgs e)
+		{
+			await RefreshQuestsAsync();
+		}
+
+		private async Task RefreshQuestsAsync()
+		{
+			string token = TokenBox.Text.Trim();
+			if (string.IsNullOrEmpty(token))
+			{
+				QuestsStatusText.Text = "No Discord token configured. Paste your token above and click Save.";
+				return;
+			}
+
+			var (quests, error) = await QuestsApi.FetchActiveQuestsAsync(token);
+			if (!string.IsNullOrEmpty(error))
+			{
+				QuestsStatusText.Text = error;
+			}
+
+			// Auto-close any tracked dummy whose quest has completed.
+			var finishedQuestIds = new List<string>();
+			foreach (var kv in _trackedQuestGames)
+			{
+				var quest = quests.Find(q => q.QuestId == kv.Key);
+				if (quest != null && quest.IsCompleted)
+				{
+					KillProcessAtPath(kv.Value);
+					finishedQuestIds.Add(kv.Key);
+					UpdateStatus($"Quest completed - stopped {Path.GetFileName(kv.Value)}.", StatusLevel.Success);
+				}
+			}
+			foreach (var id in finishedQuestIds) _trackedQuestGames.Remove(id);
+
+			_questItems = quests
+				.Where(q => !q.IsCompleted)
+				.Select(q =>
+				{
+					var matched = _discordCache.Find(g => g.Id == q.ApplicationId);
+					return new QuestListItem
+					{
+						Quest = q,
+						DisplayName = matched?.Name ?? q.QuestName,
+						HasMatch = matched != null,
+						IsTracked = _trackedQuestGames.ContainsKey(q.QuestId)
+					};
+				})
+				.ToList();
+
+			QuestsList.ItemsSource = _questItems;
+			if (string.IsNullOrEmpty(error))
+			{
+				QuestsStatusText.Text = _questItems.Count == 0
+					? "No active desktop-playtime quests found."
+					: $"{_questItems.Count} active quest(s) found.";
+			}
+		}
+
+		private void QuestAutoStart_Click(object sender, RoutedEventArgs e)
+		{
+			if (sender is not FrameworkElement fe || fe.DataContext is not QuestListItem item) return;
+			if (!item.HasMatch)
+			{
+				MessageBox.Show("No local game entry matches this quest's application. Try refetching the search database.", "No Match");
+				return;
+			}
+
+			var game = _discordCache.Find(g => g.Id == item.Quest.ApplicationId);
+			if (game == null) return;
+
+			string? path = null;
+			foreach (var exec in game.Executables)
+			{
+				if (exec.Os != "win32") continue;
+				string p = exec.Name.Replace("\\", "/");
+				var valid = IsValidPath(p);
+				if (valid.IsValid) { path = p; break; }
+			}
+			if (path == null)
+			{
+				MessageBox.Show("No usable Windows path found for this quest's game.", "No Valid Path");
+				return;
+			}
+
+			string fullPath = ProcessCreation(game.Name, path);
+			if (fullPath != null)
+			{
+				SelectGeneratedGame(fullPath);
+				RunExe(fullPath);
+				_trackedQuestGames[item.Quest.QuestId] = fullPath;
+				UpdateStatus($"Tracking quest for {game.Name}.", StatusLevel.Success);
+			}
+		}
+
+		private void KillProcessAtPath(string fullPath)
+		{
+			try
+			{
+				var processes = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(fullPath));
+				foreach (var p in processes)
+				{
+					try
+					{
+						if (p.MainModule?.FileName.Equals(fullPath, StringComparison.OrdinalIgnoreCase) == true)
+						{
+							p.Kill();
+						}
+					}
+					catch { }
+				}
+			}
+			catch { }
 		}
 
 		private void EditGame_Click(object sender, RoutedEventArgs e)

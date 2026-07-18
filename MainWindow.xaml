@@ -187,6 +187,57 @@
 					</Grid>
 				</StackPanel>
 			</TabItem>
+
+			<!-- Quests Tab: auto-detected active quests via the user's own Discord token -->
+			<TabItem Header="Quests">
+				<Grid Margin="15">
+					<Grid.RowDefinitions>
+						<RowDefinition Height="Auto"/>
+						<RowDefinition Height="Auto"/>
+						<RowDefinition Height="*"/>
+						<RowDefinition Height="Auto"/>
+					</Grid.RowDefinitions>
+
+					<TextBlock Grid.Row="0" Text="Discord Token (used only to read your own quest progress):" Margin="0,0,0,5" FontWeight="Bold"/>
+					<Grid Grid.Row="1" Margin="0,0,0,12">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*"/>
+							<ColumnDefinition Width="Auto"/>
+							<ColumnDefinition Width="Auto"/>
+						</Grid.ColumnDefinitions>
+						<TextBox x:Name="TokenBox" Grid.Column="0"/>
+						<Button Grid.Column="1" Margin="8,0,0,0" Content="Save" Background="#6c757d" Click="SaveToken_Click"/>
+						<Button Grid.Column="2" Margin="8,0,0,0" Content="Refresh Quests" Background="#3b8ed0" Click="RefreshQuests_Click"/>
+					</Grid>
+
+					<ListBox x:Name="QuestsList" Grid.Row="2" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+						<ListBox.ItemTemplate>
+							<DataTemplate>
+								<Border BorderBrush="#3f4147" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,8">
+									<Grid>
+										<Grid.ColumnDefinitions>
+											<ColumnDefinition Width="*"/>
+											<ColumnDefinition Width="Auto"/>
+										</Grid.ColumnDefinitions>
+										<StackPanel Grid.Column="0">
+											<TextBlock Text="{Binding DisplayName}" FontWeight="Bold" FontSize="15"/>
+											<TextBlock FontSize="12" Foreground="#949ba4" Margin="0,4,0,0">
+												<Run Text="{Binding ProgressText, Mode=OneWay}"/>
+												<Run Text=" - "/>
+												<Run Text="{Binding StatusText, Mode=OneWay}"/>
+											</TextBlock>
+										</StackPanel>
+										<Button Grid.Column="1" Content="Auto-Start" Background="#3ba55c" VerticalAlignment="Center" Click="QuestAutoStart_Click" IsEnabled="{Binding HasMatch}"/>
+									</Grid>
+								</Border>
+							</DataTemplate>
+						</ListBox.ItemTemplate>
+					</ListBox>
+
+					<TextBlock x:Name="QuestsStatusText" Grid.Row="3" Margin="0,10,0,0" Foreground="#949ba4" FontSize="12" TextWrapping="Wrap"
+					           Text="Paste your Discord token above, click Save, then Refresh Quests. Quests refresh automatically every 30s once a token is set."/>
+				</Grid>
+			</TabItem>
 		</TabControl>
 
 		<!-- Right Panel: Generated Games -->
@@ -198,9 +249,12 @@
 					<RowDefinition Height="Auto"/>
 				</Grid.RowDefinitions>
 
-				<TextBlock Grid.Row="0" Text="Generated Games" FontSize="18" FontWeight="Bold" Margin="0,0,0,10"/>
+				<StackPanel Grid.Row="0" Margin="0,0,0,10">
+					<TextBlock Text="Generated Games" FontSize="18" FontWeight="Bold" Margin="0,0,0,6"/>
+					<CheckBox x:Name="MinimizeOnRunCheck" Content="Launch minimized (unverified - may not count toward quest progress, test it first)" IsChecked="False" Foreground="#949ba4" FontSize="12"/>
+				</StackPanel>
 
-				<ListBox x:Name="GeneratedGamesList" Grid.Row="1" Background="Transparent" BorderThickness="0" 
+				<ListBox x:Name="GeneratedGamesList" Grid.Row="1" Background="Transparent" BorderThickness="0"
                          ItemContainerStyle="{StaticResource GeneratedGameItemStyle}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          SelectionChanged="GeneratedGamesList_SelectionChanged">
 					<ListBox.ItemTemplate>
