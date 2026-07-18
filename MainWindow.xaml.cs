@@ -53,6 +53,7 @@ namespace DiscordQuestCompleter
 	{
 		private List<DiscordGame> _discordCache = new();
 		private readonly string _baseDir;
+		private readonly string _defaultExePath;
 		private readonly string _localDbPath;
 		private bool _isDatabaseLoaded = false;
 		private bool _isSearchPlaceholder = true;
@@ -62,6 +63,7 @@ namespace DiscordQuestCompleter
 		{
 			InitializeComponent();
 			_baseDir = Path.Combine(Environment.CurrentDirectory, "DQC Game Folders");
+			_defaultExePath = Path.Combine(Environment.CurrentDirectory, "default_game.exe");
 			_localDbPath = Path.Combine(Environment.CurrentDirectory, "discord_database.json");
 			Directory.CreateDirectory(_baseDir);
 			LoadGames();
@@ -212,7 +214,45 @@ namespace DiscordQuestCompleter
 			if (pathStr.Contains("://") || pathStr.Contains("?") || pathStr.Contains("=")) return (false, "URIs or web links are not valid paths.");
 			if (Regex.IsMatch(pathStr, @"[<>:""|?*]")) return (false, "Path contains invalid Windows characters (< > : \" | ? *).");
 			if (!pathStr.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) return (false, "Path must end with '.exe'.");
+
+			try
+			{
+				string baseFull = Path.GetFullPath(_baseDir);
+				if (!baseFull.EndsWith(Path.DirectorySeparatorChar.ToString()))
+				{
+					baseFull += Path.DirectorySeparatorChar;
+				}
+				string resolvedPath = Path.GetFullPath(Path.Combine(baseFull, pathStr));
+				if (!resolvedPath.StartsWith(baseFull, StringComparison.OrdinalIgnoreCase))
+				{
+					return (false, "Path must reside inside the game folders directory.");
+				}
+			}
+			catch (Exception ex)
+			{
+				return (false, "Invalid path resolution: " + ex.Message);
+			}
+
 			return (true, "Valid");
+		}
+
+		private bool IsPathInBaseDir(string path)
+		{
+			if (string.IsNullOrEmpty(path)) return false;
+			try
+			{
+				string baseFull = Path.GetFullPath(_baseDir);
+				if (!baseFull.EndsWith(Path.DirectorySeparatorChar.ToString()))
+				{
+					baseFull += Path.DirectorySeparatorChar;
+				}
+				string pathFull = Path.GetFullPath(path);
+				return pathFull.StartsWith(baseFull, StringComparison.OrdinalIgnoreCase);
+			}
+			catch
+			{
+				return false;
+			}
 		}
 
 		private int CalculateMatchScore(string query, string target)
@@ -558,9 +598,10 @@ namespace DiscordQuestCompleter
 
 			string fullPath = Path.Combine(_baseDir, targetPath);
 
-			UpdateStatus("Compiling dummy executable...", StatusLevel.Neutral);
+			bool defaultExistedBefore = File.Exists(_defaultExePath);
+			UpdateStatus(defaultExistedBefore ? "Creating game..." : "Compiling base executable (one-time)...", StatusLevel.Neutral);
 
-			if (DummyCompiler.CompileDummyExe(fullPath, gameName, targetPath, out string error))
+			if (DummyCompiler.CreateGameExe(_defaultExePath, fullPath, gameName, targetPath, out string error))
 			{
 				UpdateStatus("Successfully created: " + Path.GetFileName(fullPath), StatusLevel.Success);
 				LoadGames(fullPath);
@@ -568,8 +609,8 @@ namespace DiscordQuestCompleter
 			}
 			else
 			{
-				UpdateStatus("Error compiling executable.", StatusLevel.Error);
-				MessageBox.Show(error, "Compilation Error");
+				UpdateStatus("Error creating game executable.", StatusLevel.Error);
+				MessageBox.Show(error, "Creation Error");
 				return null;
 			}
 		}
@@ -595,7 +636,9 @@ namespace DiscordQuestCompleter
 				string gameName = "";
 				if (File.Exists(txtPath))
 				{
-					gameName = File.ReadAllText(txtPath).Trim();
+					// Line 1 = game name, Line 2 = relative path (backwards-compat: single-line = name only)
+					var lines = File.ReadAllLines(txtPath);
+					if (lines.Length > 0) gameName = lines[0].Trim();
 				}
 				string displayName = string.IsNullOrEmpty(gameName) ? "Unnamed Game" : gameName;
 
@@ -783,27 +826,50 @@ namespace DiscordQuestCompleter
 					}
 
 					string newFullPath = Path.Combine(_baseDir, newPath);
+					string newTxtPath = Path.ChangeExtension(newFullPath, ".txt");
 
-			UpdateStatus("Applying edits...", StatusLevel.Neutral);
-					if (DummyCompiler.CompileDummyExe(newFullPath, newName, newPath, out string error))
+					// Normalise old path for comparison
+					string oldFullNorm = Path.GetFullPath(game.FullPath);
+					string newFullNorm = Path.GetFullPath(newFullPath);
+					bool pathChanged = !oldFullNorm.Equals(newFullNorm, StringComparison.OrdinalIgnoreCase);
+
+					try
 					{
-						if (game.FullPath != newFullPath)
+						UpdateStatus("Applying edits...", StatusLevel.Neutral);
+
+						if (pathChanged)
 						{
-							try
+							// Path changed: copy exe to new location, write new txt, delete old files
+							if (DummyCompiler.CreateGameExe(_defaultExePath, newFullPath, newName, newPath, out string createError))
 							{
-								File.Delete(game.FullPath);
-								string oldTxtPath = Path.ChangeExtension(game.FullPath, ".txt");
-								if (File.Exists(oldTxtPath)) File.Delete(oldTxtPath);
+								if (IsPathInBaseDir(game.FullPath))
+								{
+									File.Delete(game.FullPath);
+									string oldTxtPath = Path.ChangeExtension(game.FullPath, ".txt");
+									if (File.Exists(oldTxtPath)) File.Delete(oldTxtPath);
+								}
+								UpdateStatus("Game updated successfully.", StatusLevel.Success);
+								LoadGames(newFullPath);
 							}
-							catch { }
+							else
+							{
+								UpdateStatus("Failed to apply edits.", StatusLevel.Error);
+								MessageBox.Show(createError, "Edit Error");
+							}
 						}
-				UpdateStatus("Game updated successfully.", StatusLevel.Success);
-						LoadGames(newFullPath);
+						else
+						{
+							// Only name changed: just rewrite the .txt file — no recompile needed
+							File.WriteAllLines(newTxtPath, new[] { newName ?? "", newPath });
+							game.DisplayName = string.IsNullOrEmpty(newName) ? "Unnamed Game" : newName;
+							UpdateStatus("Game renamed successfully.", StatusLevel.Success);
+							LoadGames(game.FullPath);
+						}
 					}
-					else
+					catch (Exception ex)
 					{
-				UpdateStatus("Failed to apply edits.", StatusLevel.Error);
-						MessageBox.Show(error, "Edit Error");
+						UpdateStatus("Failed to apply edits.", StatusLevel.Error);
+						MessageBox.Show(ex.Message, "Edit Error");
 					}
 				}
 			}
@@ -824,6 +890,12 @@ namespace DiscordQuestCompleter
 
 				try
 				{
+					if (!IsPathInBaseDir(game.FullPath))
+					{
+						MessageBox.Show("Security violation: Cannot delete files outside the game folders directory.", "Delete Blocked");
+						return;
+					}
+
 					// Delete the exe and its associated .txt metadata file
 					File.Delete(game.FullPath);
 					string txtPath = Path.ChangeExtension(game.FullPath, ".txt");
@@ -840,6 +912,8 @@ namespace DiscordQuestCompleter
 							{
 								string dirFull = Path.GetFullPath(dir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 								if (string.Equals(dirFull, baseFull, StringComparison.OrdinalIgnoreCase)) break;
+								if (!IsPathInBaseDir(dirFull)) break; // Stop cleanup if it escapes baseDir
+
 								// If directory no longer exists, move up
 								if (!Directory.Exists(dirFull))
 								{
