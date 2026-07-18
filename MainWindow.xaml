@@ -177,7 +177,14 @@
 					<TextBlock Text="EXE Path (Required):" Margin="0,0,0,5" FontWeight="Bold"/>
 					<TextBox x:Name="ManualPath" Margin="0,0,0,20"/>
 
-					<Button Content="Create Game" Background="#3ba55c" Click="CreateGame_Click" Padding="10,12"/>
+					<Grid>
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*"/>
+							<ColumnDefinition Width="*"/>
+						</Grid.ColumnDefinitions>
+						<Button Grid.Column="0" Margin="0,0,5,0" Content="Create Game" Background="#17a2b8" Click="CreateGame_Click" Padding="10,12"/>
+						<Button Grid.Column="1" Margin="5,0,0,0" Content="Create &amp; Run&#x0a;(Enter)" Background="#3ba55c" Click="CreateAndRun_Click" Padding="10,12"/>
+					</Grid>
 				</StackPanel>
 			</TabItem>
 		</TabControl>

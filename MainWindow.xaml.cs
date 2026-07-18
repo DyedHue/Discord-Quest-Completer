@@ -104,6 +104,8 @@ namespace DiscordQuestCompleter
 
 		private void UpdateRunningStatus()
 		{
+			if (GeneratedGamesList.Items.Count == 0) return;
+
 			bool anyChanged = false;
 			var runningPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -213,6 +215,22 @@ namespace DiscordQuestCompleter
 			if (Regex.IsMatch(pathStr, @"[<>:""|?*]")) return (false, "Path contains invalid Windows characters (< > : \" | ? *).");
 			if (!pathStr.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) return (false, "Path must end with '.exe'.");
 			return (true, "Valid");
+		}
+
+		// Defense in depth against ".." segments and rooted paths (e.g. "/evil.exe") that would
+		// otherwise make Path.Combine(_baseDir, targetPath) resolve outside _baseDir entirely.
+		private bool IsWithinBaseDir(string fullPath)
+		{
+			try
+			{
+				string resolvedFull = Path.GetFullPath(fullPath);
+				string resolvedBase = Path.GetFullPath(_baseDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+				return resolvedFull.StartsWith(resolvedBase, StringComparison.OrdinalIgnoreCase);
+			}
+			catch
+			{
+				return false;
+			}
 		}
 
 		private int CalculateMatchScore(string query, string target)
@@ -472,17 +490,11 @@ namespace DiscordQuestCompleter
 			}
 		}
 
-		private void CreateAndRun_Click(object sender, RoutedEventArgs e)
-		{
-			string path = DoCreateGame();
-			if (path != null)
-			{
-				SelectGeneratedGame(path);
-				RunExe(path);
-			}
-		}
+		private void CreateAndRun_Click(object sender, RoutedEventArgs e) => CreateAndRunSelected();
 
-		private void CreateAndRunManual()
+		private void CreateAndRunManual() => CreateAndRunSelected();
+
+		private void CreateAndRunSelected()
 		{
 			string path = DoCreateGame();
 			if (path != null)
@@ -557,6 +569,11 @@ namespace DiscordQuestCompleter
 			}
 
 			string fullPath = Path.Combine(_baseDir, targetPath);
+			if (!IsWithinBaseDir(fullPath))
+			{
+				MessageBox.Show("The resulting path escapes the game folder sandbox.", "Invalid Path");
+				return null;
+			}
 
 			UpdateStatus("Compiling dummy executable...", StatusLevel.Neutral);
 
@@ -783,6 +800,11 @@ namespace DiscordQuestCompleter
 					}
 
 					string newFullPath = Path.Combine(_baseDir, newPath);
+					if (!IsWithinBaseDir(newFullPath))
+					{
+						MessageBox.Show("The resulting path escapes the game folder sandbox.", "Invalid Path");
+						return;
+					}
 
 			UpdateStatus("Applying edits...", StatusLevel.Neutral);
 					if (DummyCompiler.CompileDummyExe(newFullPath, newName, newPath, out string error))
@@ -829,11 +851,14 @@ namespace DiscordQuestCompleter
 					string txtPath = Path.ChangeExtension(game.FullPath, ".txt");
 					if (File.Exists(txtPath)) File.Delete(txtPath);
 
-					// Clean up empty directories up to (but not including) the base directory
+					// Clean up empty directories up to (but not including) the base directory.
+					// Only ever do this when the game's own path is confirmed inside _baseDir,
+					// so a path that somehow escaped the sandbox can't cause deletion to climb
+					// all the way up toward the drive root.
 					try
 					{
 						string dir = Path.GetDirectoryName(game.FullPath);
-						if (!string.IsNullOrEmpty(dir))
+						if (!string.IsNullOrEmpty(dir) && IsWithinBaseDir(game.FullPath))
 						{
 							string baseFull = Path.GetFullPath(_baseDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 							while (!string.IsNullOrEmpty(dir))
