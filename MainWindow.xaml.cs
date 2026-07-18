@@ -51,7 +51,8 @@ namespace DiscordQuestCompleter
 
 	public class AppSettings
 	{
-		public bool AutoRun { get; set; } = true;
+		// Default both settings to false
+		public bool AutoRun { get; set; } = false;
 		public bool CloseOnLaunch { get; set; } = false;
 	}
 
@@ -86,6 +87,9 @@ namespace DiscordQuestCompleter
 			_processTimer.Interval = TimeSpan.FromSeconds(1);
 			_processTimer.Tick += ProcessTimer_Tick;
 			_processTimer.Start();
+
+			// Ensure settings are saved when the window is closing
+			this.Closing += MainWindow_Closing;
 		}
 
 		private void LoadSettings()
@@ -100,8 +104,29 @@ namespace DiscordQuestCompleter
 			}
 			catch { }
 
-			AutoRunCheckBox.IsChecked = _settings.AutoRun;
-			CloseOnLaunchCheckBox.IsChecked = _settings.CloseOnLaunch;
+			// Set checkbox states without triggering the Setting_Changed handler to avoid
+			// intermediate writes that could persist partial state when the user
+			// toggles both options quickly.
+			try
+			{
+				if (AutoRunCheckBox != null)
+				{
+					AutoRunCheckBox.Checked -= Setting_Changed;
+					AutoRunCheckBox.Unchecked -= Setting_Changed;
+					AutoRunCheckBox.IsChecked = _settings.AutoRun;
+					AutoRunCheckBox.Checked += Setting_Changed;
+					AutoRunCheckBox.Unchecked += Setting_Changed;
+				}
+				if (CloseOnLaunchCheckBox != null)
+				{
+					CloseOnLaunchCheckBox.Checked -= Setting_Changed;
+					CloseOnLaunchCheckBox.Unchecked -= Setting_Changed;
+					CloseOnLaunchCheckBox.IsChecked = _settings.CloseOnLaunch;
+					CloseOnLaunchCheckBox.Checked += Setting_Changed;
+					CloseOnLaunchCheckBox.Unchecked += Setting_Changed;
+				}
+			}
+			catch { }
 		}
 
 		private void SaveSettings()
@@ -116,9 +141,22 @@ namespace DiscordQuestCompleter
 
 		private void Setting_Changed(object sender, RoutedEventArgs e)
 		{
-			if (AutoRunCheckBox == null || CloseOnLaunchCheckBox == null) return;
-			_settings.AutoRun = AutoRunCheckBox.IsChecked ?? true;
-			_settings.CloseOnLaunch = CloseOnLaunchCheckBox.IsChecked ?? false;
+			// Update each setting independently; guards allow this to be called
+			// even if the other checkbox hasn't been initialized yet.
+			if (AutoRunCheckBox != null)
+			{
+				_settings.AutoRun = AutoRunCheckBox.IsChecked == true;
+			}
+			if (CloseOnLaunchCheckBox != null)
+			{
+				_settings.CloseOnLaunch = CloseOnLaunchCheckBox.IsChecked == true;
+			}
+			SaveSettings();
+		}
+
+		private void MainWindow_Closing(object? sender, CancelEventArgs e)
+		{
+			// Persist current settings on exit as a fallback
 			SaveSettings();
 		}
 
