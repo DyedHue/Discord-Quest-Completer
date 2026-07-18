@@ -12,9 +12,6 @@ obj/
 # Rider
 .idea/
 
-# DQC runtime generated folders
-"DQC Game Folders"/
-
 # Temporary files
 *.tmp
 *.log
