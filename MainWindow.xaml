@@ -159,11 +159,9 @@
 						<Grid.ColumnDefinitions>
 							<ColumnDefinition Width="*"/>
 							<ColumnDefinition Width="*"/>
-							<ColumnDefinition Width="*"/>
 						</Grid.ColumnDefinitions>
 						<Button Grid.Column="0" Margin="0,0,5,0" Content="Edit in Manual Fields" Background="#6c757d" Click="CopyToManual_Click"/>
-						<Button Grid.Column="1" Margin="5,0,5,0" Content="Create Game&#x0a;(Shift+Enter)" Background="#17a2b8" Click="CreateGame_Click" Padding="10,2"/>
-						<Button Grid.Column="2" Margin="5,0,0,0" Content="Create &amp; Run&#x0a;(Enter)" Background="#3ba55c" Click="CreateAndRun_Click" Padding="10,2"/>
+						<Button Grid.Column="1" Margin="5,0,0,0" Content="Create Game&#x0a;(Enter)" Background="#3ba55c" Click="CreateGame_Click" Padding="10,2"/>
 					</Grid>
 				</Grid>
 			</TabItem>
@@ -177,7 +175,7 @@
 					<TextBlock Text="EXE Path (Required):" Margin="0,0,0,5" FontWeight="Bold"/>
 					<TextBox x:Name="ManualPath" Margin="0,0,0,20"/>
 
-					<Button Content="Create Game" Background="#3ba55c" Click="CreateGame_Click" Padding="10,12"/>
+					<Button Content="Create Game (Enter)" Background="#3ba55c" Click="CreateGame_Click" Padding="10,12"/>
 				</StackPanel>
 			</TabItem>
 		</TabControl>
@@ -242,7 +240,12 @@
 		</Border>
 
 		<!-- Footer Status -->
-		<TextBlock x:Name="StatusText" Grid.Column="0" Grid.ColumnSpan="2" 
-                   VerticalAlignment="Bottom" Foreground="#949ba4" FontWeight="SemiBold"/>
+		<StackPanel Grid.Column="0" Grid.ColumnSpan="2" VerticalAlignment="Bottom">
+			<StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+				<CheckBox x:Name="AutoRunCheckBox" Content="Run automatically after creating" Foreground="#dbdee1" Margin="0,0,20,0" Checked="Setting_Changed" Unchecked="Setting_Changed"/>
+				<CheckBox x:Name="CloseOnLaunchCheckBox" Content="Close this window after launching" Foreground="#dbdee1" Checked="Setting_Changed" Unchecked="Setting_Changed"/>
+			</StackPanel>
+			<TextBlock x:Name="StatusText" Foreground="#949ba4" FontWeight="SemiBold"/>
+		</StackPanel>
 	</Grid>
 </Window>

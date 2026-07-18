@@ -49,12 +49,20 @@ namespace DiscordQuestCompleter
 		}
 	}
 
+	public class AppSettings
+	{
+		public bool AutoRun { get; set; } = true;
+		public bool CloseOnLaunch { get; set; } = false;
+	}
+
 	public partial class MainWindow : Window
 	{
 		private List<DiscordGame> _discordCache = new();
 		private readonly string _baseDir;
 		private readonly string _defaultExePath;
 		private readonly string _localDbPath;
+		private readonly string _settingsPath;
+		private AppSettings _settings = new AppSettings();
 		private bool _isDatabaseLoaded = false;
 		private bool _isSearchPlaceholder = true;
 		private DispatcherTimer _processTimer;
@@ -65,6 +73,10 @@ namespace DiscordQuestCompleter
 			_baseDir = Path.Combine(Environment.CurrentDirectory, "DQC Game Folders");
 			_defaultExePath = Path.Combine(Environment.CurrentDirectory, "default_game.exe");
 			_localDbPath = Path.Combine(Environment.CurrentDirectory, "discord_database.json");
+			_settingsPath = Path.Combine(Environment.CurrentDirectory, "settings.json");
+
+			LoadSettings();
+
 			Directory.CreateDirectory(_baseDir);
 			LoadGames();
 			// Try to load local database if present. Do not auto-fetch from network to save users' data.
@@ -74,6 +86,40 @@ namespace DiscordQuestCompleter
 			_processTimer.Interval = TimeSpan.FromSeconds(1);
 			_processTimer.Tick += ProcessTimer_Tick;
 			_processTimer.Start();
+		}
+
+		private void LoadSettings()
+		{
+			try
+			{
+				if (File.Exists(_settingsPath))
+				{
+					string json = File.ReadAllText(_settingsPath);
+					_settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+				}
+			}
+			catch { }
+
+			AutoRunCheckBox.IsChecked = _settings.AutoRun;
+			CloseOnLaunchCheckBox.IsChecked = _settings.CloseOnLaunch;
+		}
+
+		private void SaveSettings()
+		{
+			try
+			{
+				string json = JsonSerializer.Serialize(_settings);
+				File.WriteAllText(_settingsPath, json);
+			}
+			catch { }
+		}
+
+		private void Setting_Changed(object sender, RoutedEventArgs e)
+		{
+			if (AutoRunCheckBox == null || CloseOnLaunchCheckBox == null) return;
+			_settings.AutoRun = AutoRunCheckBox.IsChecked ?? true;
+			_settings.CloseOnLaunch = CloseOnLaunchCheckBox.IsChecked ?? false;
+			SaveSettings();
 		}
 
 		private void ProcessTimer_Tick(object sender, EventArgs e)
@@ -154,22 +200,9 @@ namespace DiscordQuestCompleter
 
 		private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
 		{
-			// Disable global keyboard shortcuts when Manual Creation tab is selected
-			if (Tabs.SelectedIndex == 1)
-			{
-				return;
-			}
 			if (e.Key == Key.Enter)
 			{
-				if ((Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift)
-				{
-					if (Tabs.SelectedIndex == 0) DoCreateGame();
-				}
-				else
-				{
-					if (Tabs.SelectedIndex == 0) CreateAndRun_Click(null, null);
-					else if (Tabs.SelectedIndex == 1) CreateAndRunManual();
-				}
+				CreateGame_Click(null, null);
 				e.Handled = true;
 			}
 			else if (e.Key == Key.Up || e.Key == Key.Down)
@@ -371,7 +404,7 @@ namespace DiscordQuestCompleter
 		{
 			try
 			{
-			UpdateStatus("Fetching Discord games database...", StatusLevel.Neutral);
+				UpdateStatus("Fetching Discord games database...", StatusLevel.Neutral);
 				using var client = new HttpClient();
 				client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
 
@@ -397,9 +430,9 @@ namespace DiscordQuestCompleter
 				if (File.Exists(_localDbPath))
 				{
 					string json = File.ReadAllText(_localDbPath);
-				_discordCache = JsonSerializer.Deserialize<List<DiscordGame>>(json) ?? new();
-				_isDatabaseLoaded = true;
-				UpdateStatus("Ready. Local Discord database loaded.", StatusLevel.Success);
+					_discordCache = JsonSerializer.Deserialize<List<DiscordGame>>(json) ?? new();
+					_isDatabaseLoaded = true;
+					UpdateStatus("Ready. Local Discord database loaded.", StatusLevel.Success);
 				}
 				else
 				{
@@ -499,7 +532,7 @@ namespace DiscordQuestCompleter
 				ManualName.Text = game.Name;
 				ManualPath.Text = path;
 				Tabs.SelectedIndex = 1;
-			UpdateStatus("Copied to manual entry.", StatusLevel.Success);
+				UpdateStatus("Copied to manual entry.", StatusLevel.Success);
 			}
 		}
 
@@ -509,26 +542,10 @@ namespace DiscordQuestCompleter
 			if (path != null)
 			{
 				SelectGeneratedGame(path);
-			}
-		}
-
-		private void CreateAndRun_Click(object sender, RoutedEventArgs e)
-		{
-			string path = DoCreateGame();
-			if (path != null)
-			{
-				SelectGeneratedGame(path);
-				RunExe(path);
-			}
-		}
-
-		private void CreateAndRunManual()
-		{
-			string path = DoCreateGame();
-			if (path != null)
-			{
-				SelectGeneratedGame(path);
-				RunExe(path);
+				if (_settings.AutoRun)
+				{
+					RunExe(path);
+				}
 			}
 		}
 
@@ -758,7 +775,7 @@ namespace DiscordQuestCompleter
 
 				if (alreadyRunning)
 				{
-			UpdateStatus($"{processName} is already running.", StatusLevel.Error);
+					UpdateStatus($"{processName} is already running.", StatusLevel.Error);
 					return;
 				}
 
@@ -767,8 +784,13 @@ namespace DiscordQuestCompleter
 					FileName = fullPath,
 					UseShellExecute = true
 				});
-			UpdateStatus("Started process: " + processName, StatusLevel.Success);
+				UpdateStatus("Started process: " + processName, StatusLevel.Success);
 				Task.Delay(500).ContinueWith(_ => Dispatcher.Invoke(UpdateRunningStatus));
+
+				if (_settings.CloseOnLaunch)
+				{
+					this.Close();
+				}
 			}
 			catch (Exception ex)
 			{
@@ -938,7 +960,7 @@ namespace DiscordQuestCompleter
 					catch { /* Non-fatal cleanup errors ignored */ }
 
 					LoadGames();
-			UpdateStatus("Deleted " + Path.GetFileName(game.FullPath), StatusLevel.Success);
+					UpdateStatus("Deleted " + Path.GetFileName(game.FullPath), StatusLevel.Success);
 				}
 				catch (Exception ex)
 				{
