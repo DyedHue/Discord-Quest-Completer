@@ -163,11 +163,11 @@
 					<!-- Search Action Buttons -->
 					<Grid Grid.Row="2" Margin="0,15,0,0">
 						<Grid.ColumnDefinitions>
-							<ColumnDefinition Width="*"/>
+							<ColumnDefinition Width="5*"/>
 							<ColumnDefinition Width="*"/>
 						</Grid.ColumnDefinitions>
-						<Button Grid.Column="0" Margin="0,0,5,0" Content="Edit in Manual Fields" Background="#6c757d" Click="CopyToManual_Click"/>
-						<Button Grid.Column="1" Margin="5,0,0,0" Content="Create Game (Enter)" Background="#3ba55c" Click="CreateGame_Click" Padding="10,2"/>
+						<Button Grid.Column="0" Margin="0,0,5,0" Content="Create Game (Enter)" Background="#3ba55c" Click="CreateGame_Click" Padding="10,2"/>
+						<Button Grid.Column="1" Margin="5,0,0,0" Content="✏️" Background="#6c757d" Click="CopyToManual_Click"/>
 					</Grid>
 				</Grid>
 			</TabItem>
@@ -235,11 +235,20 @@
 
 				<!-- Generated Games Action Buttons -->
 				<Grid Grid.Row="2" Margin="0,15,0,0">
-					<UniformGrid x:Name="NotRunningButtons" Columns="3" Visibility="Visible">
-						<Button Content="Run" Margin="0,0,5,0" Background="#007bff" Click="RunGame_Click"/>
-						<Button Content="Edit" Margin="5,0,5,0" Background="#ffc107" Foreground="Black" Click="EditGame_Click"/>
-						<Button Content="Delete" Margin="5,0,0,0" Background="#ed4245" Click="DeleteGame_Click"/>
-					</UniformGrid>
+					<Grid x:Name="NotRunningButtons" Visibility="Visible">
+						<Grid.ColumnDefinitions>
+							<!-- Run button gets 3 parts of space -->
+							<ColumnDefinition Width="3*"/>
+							<!-- Edit & Delete each get 1 part -->
+							<ColumnDefinition Width="*"/>
+							<ColumnDefinition Width="*"/>
+						</Grid.ColumnDefinitions>
+
+						<Button Grid.Column="0" Content="Run" Margin="0,0,5,0" Background="#007bff" Click="RunGame_Click"/>
+						<Button Grid.Column="1" Content="✏️" Margin="5,0,5,0" Background="#ffc107" Foreground="Black" Click="EditGame_Click"/>
+						<Button Grid.Column="2" Content="🗑️" Margin="5,0,0,0" Background="#ed4245" Click="DeleteGame_Click"/>
+					</Grid>
+
 					<Button x:Name="StopButton" Content="Stop" Background="#ed4245" Visibility="Collapsed" Click="StopGame_Click"/>
 				</Grid>
 			</Grid>
