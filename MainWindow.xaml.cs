@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -54,10 +55,15 @@ namespace DiscordQuestCompleter
 		// Default both settings to false
 		public bool AutoRun { get; set; } = false;
 		public bool CloseOnLaunch { get; set; } = false;
+		public bool StartMinimized { get; set; } = false;
 	}
 
 	public partial class MainWindow : Window
 	{
+		// P/Invoke for minimizing windows
+		[DllImport("user32.dll")]
+		private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
 		private List<DiscordGame> _discordCache = new();
 		private readonly string _baseDir;
 		private readonly string _defaultExePath;
@@ -125,6 +131,14 @@ namespace DiscordQuestCompleter
 					CloseOnLaunchCheckBox.Checked += Setting_Changed;
 					CloseOnLaunchCheckBox.Unchecked += Setting_Changed;
 				}
+				if (StartMinimizedCheckBox != null)
+				{
+					StartMinimizedCheckBox.Checked -= Setting_Changed;
+					StartMinimizedCheckBox.Unchecked -= Setting_Changed;
+					StartMinimizedCheckBox.IsChecked = _settings.StartMinimized;
+					StartMinimizedCheckBox.Checked += Setting_Changed;
+					StartMinimizedCheckBox.Unchecked += Setting_Changed;
+				}
 			}
 			catch { }
 		}
@@ -150,6 +164,10 @@ namespace DiscordQuestCompleter
 			if (CloseOnLaunchCheckBox != null)
 			{
 				_settings.CloseOnLaunch = CloseOnLaunchCheckBox.IsChecked == true;
+			}
+			if (StartMinimizedCheckBox != null)
+			{
+				_settings.StartMinimized = StartMinimizedCheckBox.IsChecked == true;
 			}
 			SaveSettings();
 		}
@@ -824,6 +842,36 @@ namespace DiscordQuestCompleter
 				});
 				UpdateStatus("Started process: " + processName, StatusLevel.Success);
 				Task.Delay(500).ContinueWith(_ => Dispatcher.Invoke(UpdateRunningStatus));
+
+				// Minimize the game window if the setting is enabled
+				if (_settings.StartMinimized)
+				{
+					Task.Delay(300).ContinueWith(_ =>
+					{
+						try
+						{
+							var processes = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(processName));
+							foreach (var p in processes)
+							{
+								try
+								{
+									if (p.MainModule?.FileName.Equals(fullPath, StringComparison.OrdinalIgnoreCase) == true)
+									{
+										IntPtr handle = p.MainWindowHandle;
+										if (handle != IntPtr.Zero)
+										{
+											// Minimize the window
+											ShowWindow(handle, 6); // SW_MINIMIZE = 6
+										}
+										break;
+									}
+								}
+								catch { }
+							}
+						}
+						catch { }
+					});
+				}
 
 				if (_settings.CloseOnLaunch)
 				{

@@ -105,13 +105,18 @@
 	</Window.Resources>
 
 	<Grid Margin="15">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="*"/>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="Auto"/>
+		</Grid.RowDefinitions>
 		<Grid.ColumnDefinitions>
 			<ColumnDefinition Width="65*"/>
 			<ColumnDefinition Width="35*"/>
 		</Grid.ColumnDefinitions>
 
 		<!-- Left Panel: Tabs -->
-		<TabControl x:Name="Tabs" Grid.Column="0" Margin="0,0,15,20" Background="#292a2e" BorderThickness="0">
+		<TabControl x:Name="Tabs" Grid.Row="0" Grid.Column="0" Margin="0,0,15,20" Background="#292a2e" BorderThickness="0">
 			<!-- Auto Search Tab -->
 			<TabItem Header="Search Mode">
 				<Grid Margin="15">
@@ -182,7 +187,7 @@
 		</TabControl>
 
 		<!-- Right Panel: Generated Games -->
-		<Border Grid.Column="1" Margin="0,0,0,20" Background="#292a2e" CornerRadius="6" Padding="15">
+		<Border Grid.Row="0" Grid.Column="1" Margin="0,0,0,20" Background="#292a2e" CornerRadius="6" Padding="15">
 			<Grid>
 				<Grid.RowDefinitions>
 					<RowDefinition Height="Auto"/>
@@ -240,12 +245,17 @@
 			</Grid>
 		</Border>
 
-		<!-- Footer Status -->
-		<StackPanel Grid.Column="0" Grid.ColumnSpan="2" VerticalAlignment="Bottom">
-			<StackPanel Orientation="Horizontal" Margin="0,0,0,5">
-				<CheckBox x:Name="AutoRunCheckBox" Content="Run automatically after creating" Foreground="#dbdee1" Margin="0,0,20,0" Checked="Setting_Changed" Unchecked="Setting_Changed"/>
-				<CheckBox x:Name="CloseOnLaunchCheckBox" Content="Close this window after launching" Foreground="#dbdee1" Checked="Setting_Changed" Unchecked="Setting_Changed"/>
+		<!-- Footer Settings -->
+		<Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,5" Background="#292a2e" CornerRadius="6" Padding="10,5">
+			<StackPanel Orientation="Horizontal">
+				<CheckBox x:Name="AutoRunCheckBox" Content="Run automatically after creating" Foreground="#dbdee1" Margin="0,0,25,0" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center"/>
+				<CheckBox x:Name="CloseOnLaunchCheckBox" Content="Close this window after launching" Foreground="#dbdee1" Margin="0,0,25,0" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center"/>
+				<CheckBox x:Name="StartMinimizedCheckBox" Content="Start games minimized" Foreground="#dbdee1" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center"/>
 			</StackPanel>
+		</Border>
+
+		<!-- Footer Status -->
+		<StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2">
 			<TextBlock x:Name="StatusText" Foreground="#949ba4" FontWeight="SemiBold"/>
 		</StackPanel>
 	</Grid>
