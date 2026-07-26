@@ -846,7 +846,7 @@ namespace DiscordQuestCompleter
 				// Minimize the game window if the setting is enabled
 				if (_settings.StartMinimized)
 				{
-					Task.Delay(300).ContinueWith(_ =>
+					Task.Delay(500).ContinueWith(_ =>
 					{
 						try
 						{
@@ -870,10 +870,15 @@ namespace DiscordQuestCompleter
 							}
 						}
 						catch { }
+
+						// If CloseOnLaunch is also enabled, close the window after minimizing
+						if (_settings.CloseOnLaunch)
+						{
+							Dispatcher.Invoke(() => this.Close());
+						}
 					});
 				}
-
-				if (_settings.CloseOnLaunch)
+				else if (_settings.CloseOnLaunch)
 				{
 					this.Close();
 				}
