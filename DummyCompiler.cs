@@ -7,7 +7,7 @@ namespace DiscordQuestCompleter
     public static class DummyCompiler
     {
         /// <summary>
-        /// Ensures the generic default_game.exe exists in the application root.
+        /// Ensures the generic game_template.exe exists in the application root.
         /// If it does not exist, it is compiled once using csc.exe.
         /// </summary>
         public static bool EnsureDefaultExe(string defaultExePath, out string error)
@@ -137,9 +137,9 @@ class DummyGame : Form
         }
 
         /// <summary>
-        /// Creates a game exe by copying the generic default_game.exe to the target path,
+        /// Creates a game exe by copying the generic game_template.exe to the target path,
         /// then writes a .txt metadata file with the game name on line 1 and the relative
-        /// path on line 2. Compiles default_game.exe first if it doesn't exist yet.
+        /// path on line 2. Compiles game_template.exe first if it doesn't exist yet.
         /// </summary>
         public static bool CreateGameExe(string defaultExePath, string exePath, string gameName, string targetRelPath, out string error)
         {
