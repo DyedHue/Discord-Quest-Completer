@@ -56,6 +56,9 @@ namespace DiscordQuestCompleter
 		public bool AutoRun { get; set; } = false;
 		public bool CloseOnLaunch { get; set; } = false;
 		public bool StartMinimized { get; set; } = false;
+		public double TimerMinutes { get; set; } = 15.0;
+		public bool CloseGameTimer { get; set; } = false;
+		public bool SendNotification { get; set; } = false;
 	}
 
 	public partial class MainWindow : Window
@@ -78,8 +81,8 @@ namespace DiscordQuestCompleter
 		{
 			InitializeComponent();
 			ToolTipService.InitialShowDelayProperty.OverrideMetadata(
-            	typeof(FrameworkElement),
-            	new FrameworkPropertyMetadata(100));
+				typeof(FrameworkElement),
+				new FrameworkPropertyMetadata(100));
 
 			_baseDir = Path.Combine(Environment.CurrentDirectory, "DQC Game Folders");
 			_defaultExePath = Path.Combine(Environment.CurrentDirectory, "game_template.exe");
@@ -143,6 +146,28 @@ namespace DiscordQuestCompleter
 					StartMinimizedCheckBox.Checked += Setting_Changed;
 					StartMinimizedCheckBox.Unchecked += Setting_Changed;
 				}
+				if (TimerMinutesTextBox != null)
+				{
+					TimerMinutesTextBox.TextChanged -= Setting_Changed;
+					TimerMinutesTextBox.Text = _settings.TimerMinutes.ToString();
+					TimerMinutesTextBox.TextChanged += Setting_Changed;
+				}
+				if (CloseGameTimerCheckBox != null)
+				{
+					CloseGameTimerCheckBox.Checked -= Setting_Changed;
+					CloseGameTimerCheckBox.Unchecked -= Setting_Changed;
+					CloseGameTimerCheckBox.IsChecked = _settings.CloseGameTimer;
+					CloseGameTimerCheckBox.Checked += Setting_Changed;
+					CloseGameTimerCheckBox.Unchecked += Setting_Changed;
+				}
+				if (SendNotificationCheckBox != null)
+				{
+					SendNotificationCheckBox.Checked -= Setting_Changed;
+					SendNotificationCheckBox.Unchecked -= Setting_Changed;
+					SendNotificationCheckBox.IsChecked = _settings.SendNotification;
+					SendNotificationCheckBox.Checked += Setting_Changed;
+					SendNotificationCheckBox.Unchecked += Setting_Changed;
+				}
 			}
 			catch { }
 		}
@@ -172,6 +197,18 @@ namespace DiscordQuestCompleter
 			if (StartMinimizedCheckBox != null)
 			{
 				_settings.StartMinimized = StartMinimizedCheckBox.IsChecked == true;
+			}
+			if (TimerMinutesTextBox != null && double.TryParse(TimerMinutesTextBox.Text, out double minutes))
+			{
+				_settings.TimerMinutes = minutes;
+			}
+			if (CloseGameTimerCheckBox != null)
+			{
+				_settings.CloseGameTimer = CloseGameTimerCheckBox.IsChecked == true;
+			}
+			if (SendNotificationCheckBox != null)
+			{
+				_settings.SendNotification = SendNotificationCheckBox.IsChecked == true;
 			}
 			SaveSettings();
 		}
@@ -847,42 +884,7 @@ namespace DiscordQuestCompleter
 				UpdateStatus("Started process: " + processName, StatusLevel.Success);
 				Task.Delay(500).ContinueWith(_ => Dispatcher.Invoke(UpdateRunningStatus));
 
-				// Minimize the game window if the setting is enabled
-				if (_settings.StartMinimized)
-				{
-					Task.Delay(500).ContinueWith(_ =>
-					{
-						try
-						{
-							var processes = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(processName));
-							foreach (var p in processes)
-							{
-								try
-								{
-									if (p.MainModule?.FileName.Equals(fullPath, StringComparison.OrdinalIgnoreCase) == true)
-									{
-										IntPtr handle = p.MainWindowHandle;
-										if (handle != IntPtr.Zero)
-										{
-											// Minimize the window
-											ShowWindow(handle, 6); // SW_MINIMIZE = 6
-										}
-										break;
-									}
-								}
-								catch { }
-							}
-						}
-						catch { }
-
-						// If CloseOnLaunch is also enabled, close the window after minimizing
-						if (_settings.CloseOnLaunch)
-						{
-							Dispatcher.Invoke(() => this.Close());
-						}
-					});
-				}
-				else if (_settings.CloseOnLaunch)
+				if (_settings.CloseOnLaunch)
 				{
 					this.Close();
 				}
