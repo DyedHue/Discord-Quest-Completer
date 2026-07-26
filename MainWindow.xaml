@@ -6,7 +6,6 @@
         Loaded="Window_Loaded" PreviewKeyDown="Window_PreviewKeyDown">
 
 	<Window.Resources>
-		<!-- Button Style -->
 		<Style TargetType="Button">
 			<Setter Property="Background" Value="#5865f2"/>
 			<Setter Property="Foreground" Value="White"/>
@@ -138,7 +137,7 @@
 								 TextChanged="SearchBox_TextChanged"/>
 
 						<Button x:Name="RefetchButton" Grid.Column="1" Margin="8,0,0,0" Width="36" Height="32" Click="RefetchButton_Click"
-								ToolTip="Refetch search database? (~11MB download)">
+								ToolTip="Refetch search database (~11MB download)">
 							<TextBlock Text="⟳" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
 						</Button>
 					</Grid>
@@ -167,7 +166,7 @@
 							<ColumnDefinition Width="*"/>
 						</Grid.ColumnDefinitions>
 						<Button Grid.Column="0" Margin="0,0,5,0" Content="Create Game (Enter)" Background="#3ba55c" Click="CreateGame_Click" Padding="10,2"/>
-						<Button Grid.Column="1" Margin="5,0,0,0" Content="✏️" Background="#6c757d" Click="CopyToManual_Click"/>
+						<Button Grid.Column="1" Margin="5,0,0,0" Content="✏️" Background="#6c757d" Click="CopyToManual_Click" ToolTip="Edit in Manual Fields"/>
 					</Grid>
 				</Grid>
 			</TabItem>
@@ -244,9 +243,9 @@
 							<ColumnDefinition Width="*"/>
 						</Grid.ColumnDefinitions>
 
-						<Button Grid.Column="0" Content="Run" Margin="0,0,5,0" Background="#007bff" Click="RunGame_Click"/>
-						<Button Grid.Column="1" Content="✏️" Margin="5,0,5,0" Background="#ffc107" Foreground="Black" Click="EditGame_Click"/>
-						<Button Grid.Column="2" Content="🗑️" Margin="5,0,0,0" Background="#ed4245" Click="DeleteGame_Click"/>
+						<Button Grid.Column="0" Content="Run" Margin="0,0,5,0" Background="#2d90fa" Click="RunGame_Click"/>
+						<Button Grid.Column="1" Content="✏️" Margin="5,0,5,0" Background="#ffc107" Foreground="Black" Click="EditGame_Click" ToolTip="Edit Name or Path"/>
+						<Button Grid.Column="2" Content="🗑️" Margin="5,0,0,0" Background="#ed4245" Click="DeleteGame_Click" ToolTip="Delete Entry"/>
 					</Grid>
 
 					<Button x:Name="StopButton" Content="Stop" Background="#ed4245" Visibility="Collapsed" Click="StopGame_Click"/>

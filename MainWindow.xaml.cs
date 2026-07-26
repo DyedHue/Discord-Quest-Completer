@@ -77,6 +77,10 @@ namespace DiscordQuestCompleter
 		public MainWindow()
 		{
 			InitializeComponent();
+			ToolTipService.InitialShowDelayProperty.OverrideMetadata(
+            	typeof(FrameworkElement),
+            	new FrameworkPropertyMetadata(100));
+
 			_baseDir = Path.Combine(Environment.CurrentDirectory, "DQC Game Folders");
 			_defaultExePath = Path.Combine(Environment.CurrentDirectory, "game_template.exe");
 			_localDbPath = Path.Combine(Environment.CurrentDirectory, "discord_search_database.json");
