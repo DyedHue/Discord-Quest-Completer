@@ -1,5 +1,5 @@
-<img width="1712" height="760" alt="image" src="https://github.com/user-attachments/assets/0b92d16e-7d23-4c86-b984-29ff3f3d854a" />
-
+<img width="1691" height="751" alt="image" src="https://github.com/user-attachments/assets/c557a38e-5ac4-412c-af21-01064ca73781" />
+<img width="250" alt="image" src="https://github.com/user-attachments/assets/847daf87-58c9-457f-abc2-9ce26495efd7" />
 
 # What is it?  
 For detecting a valid game, Discord only checks the name of the exe that you are running and a few parent folders.  
