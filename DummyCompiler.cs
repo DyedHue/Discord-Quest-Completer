@@ -136,12 +136,60 @@ class DummyGame : Form
             this.ShowInTaskbar = true;
         }
 
-        Label lbl = new Label();
-        lbl.Text = ""Target Path: "" + targetRelPath + ""\n\nDummy game process is running.\nKeep this window open to progress the quest."";
+        RichTextBox lbl = new RichTextBox();
         lbl.Top = 20;
         lbl.Left = 20;
         lbl.Width = 550;
         lbl.Height = 120;
+        lbl.ReadOnly = true;
+        lbl.BorderStyle = BorderStyle.None;
+        lbl.BackColor = this.BackColor;
+
+        string labelText = ""Target Path: "" + targetRelPath + ""\n\nDummy game process is running.\n"";
+        labelText += ""Keep this window open to progress the quest.\n"";
+
+        DateTime startTime = DateTime.Now;
+        DateTime endTime = startTime;
+        
+        if (closeGameTimer || sendNotification)
+        {
+            endTime = startTime.AddMinutes(timerMinutes);
+            labelText += ""\nTimer set to "" + timerMinutes + "" minutes. Started at "" + startTime.ToString(""h:mm:ss tt"") + "", will end at "" + endTime.ToString(""h:mm:ss tt"") + "".\n\nAfter the timer, "";
+            
+            if (closeGameTimer)
+            {
+                labelText += ""this window will automatically close"";
+                if (sendNotification)
+                    labelText += "" and you will receive a notification"";
+            }
+            else
+                labelText += ""you will receive a notification.\nClose this window manually"";
+            labelText += ""."";
+        }
+        else
+        {
+            labelText += ""Close this window once you are done."";
+        }
+
+        lbl.Text = labelText;
+        
+        if (closeGameTimer || sendNotification)
+        {
+            string tMinStr = timerMinutes.ToString();
+            string sTimeStr = startTime.ToString(""h:mm:ss tt"");
+            string eTimeStr = endTime.ToString(""h:mm:ss tt"");
+            
+            int idx = lbl.Text.IndexOf(tMinStr);
+            if (idx >= 0) { lbl.Select(idx, tMinStr.Length); lbl.SelectionColor = System.Drawing.Color.RoyalBlue; lbl.SelectionFont = new System.Drawing.Font(lbl.Font, System.Drawing.FontStyle.Bold); }
+            
+            idx = lbl.Text.IndexOf(sTimeStr);
+            if (idx >= 0) { lbl.Select(idx, sTimeStr.Length); lbl.SelectionColor = System.Drawing.Color.RoyalBlue; lbl.SelectionFont = new System.Drawing.Font(lbl.Font, System.Drawing.FontStyle.Bold); }
+            
+            idx = lbl.Text.IndexOf(eTimeStr, lbl.Text.IndexOf(sTimeStr) + sTimeStr.Length);
+            if (idx >= 0) { lbl.Select(idx, eTimeStr.Length); lbl.SelectionColor = System.Drawing.Color.RoyalBlue; lbl.SelectionFont = new System.Drawing.Font(lbl.Font, System.Drawing.FontStyle.Bold); }
+            lbl.Select(0, 0);
+        }
+
         this.Controls.Add(lbl);
 
         if (closeGameTimer || sendNotification)

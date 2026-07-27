@@ -194,7 +194,7 @@
 					<RowDefinition Height="Auto"/>
 				</Grid.RowDefinitions>
 
-				<TextBlock Grid.Row="0" Text="Generated Games" FontSize="18" FontWeight="Bold" Margin="0,0,0,10"/>
+				<TextBlock Grid.Row="0" Text="Generated Dummy Games" FontSize="18" FontWeight="Bold" Margin="0,0,0,10"/>
 
 				<ListBox x:Name="GeneratedGamesList" Grid.Row="1" Background="Transparent" BorderThickness="0" 
                          ItemContainerStyle="{StaticResource GeneratedGameItemStyle}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
