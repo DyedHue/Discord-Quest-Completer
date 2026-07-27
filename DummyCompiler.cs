@@ -244,27 +244,29 @@ class DummyGame : Form
 					CreateNoWindow = true
 				};
 
-				using var process = Process.Start(startInfo);
-				if (process == null)
+				using (var process = Process.Start(startInfo))
 				{
-					error = "Failed to start compiler process.";
-					return false;
-				}
+					if (process == null)
+					{
+						error = "Failed to start compiler process.";
+						return false;
+					}
 
-				process.WaitForExit();
-				string output = process.StandardOutput.ReadToEnd();
-				string errOut = process.StandardError.ReadToEnd();
+					process.WaitForExit();
+					string output = process.StandardOutput.ReadToEnd();
+					string errOut = process.StandardError.ReadToEnd();
 
-				if (File.Exists(csPath)) File.Delete(csPath);
+					if (File.Exists(csPath)) File.Delete(csPath);
 
-				if (process.ExitCode == 0)
-				{
-					return true;
-				}
-				else
-				{
-					error = $"Compilation failed:\n{errOut}\n{output}";
-					return false;
+					if (process.ExitCode == 0)
+					{
+						return true;
+					}
+					else
+					{
+						error = $"Compilation failed:\n{errOut}\n{output}";
+						return false;
+					}
 				}
 			}
 			catch (Exception ex)

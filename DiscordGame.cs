@@ -1,26 +1,17 @@
 using System;
-using System.Text.Json.Serialization;
 
 namespace DiscordQuestCompleter
 {
     public class DiscordGame
     {
-        [JsonPropertyName("name")]
-        public string Name { get; set; } = "";
-
-        [JsonPropertyName("aliases")]
-        public string[] Aliases { get; set; } = Array.Empty<string>();
-
-        [JsonPropertyName("executables")]
-        public GameExecutable[] Executables { get; set; } = Array.Empty<GameExecutable>();
+        public string name { get; set; } = "";
+        public string[] aliases { get; set; } = new string[0];
+        public GameExecutable[] executables { get; set; } = new GameExecutable[0];
     }
 
     public class GameExecutable
     {
-        [JsonPropertyName("name")]
-        public string Name { get; set; } = "";
-
-        [JsonPropertyName("os")]
-        public string Os { get; set; } = "";
+        public string name { get; set; } = "";
+        public string os { get; set; } = "";
     }
 }

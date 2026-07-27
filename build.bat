@@ -1,10 +1,10 @@
 @echo off
-echo Building Discord Quest Completer as a single standalone executable...
+echo Building Discord Quest Completer (Targeting .NET Framework 4.8)...
 echo.
 
-dotnet publish DiscordQuestCompleter.csproj -c Release -r win-x64 -p:PublishSingleFile=true
+dotnet build DiscordQuestCompleter.csproj -c Release
 
 echo.
-echo Build complete! Your single .exe file is located in:
-echo bin\Release\net8.0-windows\win-x64\publish\
+echo Build complete! Your compiled .exe file is located in:
+echo bin\Release\net48\
 pause

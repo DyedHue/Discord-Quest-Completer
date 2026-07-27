@@ -7,8 +7,8 @@ using System.Linq;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Web.Script.Serialization;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -67,7 +67,7 @@ namespace DiscordQuestCompleter
 		[DllImport("user32.dll")]
 		private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
-		private List<DiscordGame> _discordCache = new();
+		private List<DiscordGame> _discordCache = new List<DiscordGame>();
 		private readonly string _baseDir;
 		private readonly string _defaultExePath;
 		private readonly string _localDbPath;
@@ -112,7 +112,8 @@ namespace DiscordQuestCompleter
 				if (File.Exists(_settingsPath))
 				{
 					string json = File.ReadAllText(_settingsPath);
-					_settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+					var serializer = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+					_settings = serializer.Deserialize<AppSettings>(json) ?? new AppSettings();
 				}
 			}
 			catch { }
@@ -176,7 +177,8 @@ namespace DiscordQuestCompleter
 		{
 			try
 			{
-				string json = JsonSerializer.Serialize(_settings);
+				var serializer = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+				string json = serializer.Serialize(_settings);
 				File.WriteAllText(_settingsPath, json);
 			}
 			catch { }
@@ -213,7 +215,7 @@ namespace DiscordQuestCompleter
 			SaveSettings();
 		}
 
-		private void MainWindow_Closing(object? sender, CancelEventArgs e)
+		private void MainWindow_Closing(object sender, CancelEventArgs e)
 		{
 			// Persist current settings on exit as a fallback
 			SaveSettings();
@@ -400,7 +402,7 @@ namespace DiscordQuestCompleter
 			if (tNorm.StartsWith(qNorm)) score += 500;
 			else if (tNorm.Contains(qNorm)) score += 200;
 
-			var qTokens = qNorm.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+			var qTokens = qNorm.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
 			int tokensMatched = 0;
 			foreach (var token in qTokens)
 			{
@@ -502,16 +504,19 @@ namespace DiscordQuestCompleter
 			try
 			{
 				UpdateStatus("Fetching Discord games database...", StatusLevel.Neutral);
-				using var client = new HttpClient();
-				client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
-
-				string json = await client.GetStringAsync("https://discord.com/api/applications/detectable");
-				_discordCache = JsonSerializer.Deserialize<List<DiscordGame>>(json) ?? new();
-				if (saveToLocal)
+				using (var client = new HttpClient())
 				{
-					try { File.WriteAllText(_localDbPath, json); } catch { }
+					client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+
+					string json = await client.GetStringAsync("https://discord.com/api/applications/detectable");
+					var serializer = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+					_discordCache = serializer.Deserialize<List<DiscordGame>>(json) ?? new List<DiscordGame>();
+					if (saveToLocal)
+					{
+						try { File.WriteAllText(_localDbPath, json); } catch { }
+					}
+					UpdateStatus("Ready. Discord database loaded.", StatusLevel.Success);
 				}
-				UpdateStatus("Ready. Discord database loaded.", StatusLevel.Success);
 			}
 			catch (Exception ex)
 			{
@@ -527,7 +532,8 @@ namespace DiscordQuestCompleter
 				if (File.Exists(_localDbPath))
 				{
 					string json = File.ReadAllText(_localDbPath);
-					_discordCache = JsonSerializer.Deserialize<List<DiscordGame>>(json) ?? new();
+					var serializer = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+					_discordCache = serializer.Deserialize<List<DiscordGame>>(json) ?? new List<DiscordGame>();
 					_isDatabaseLoaded = true;
 					UpdateStatus("Ready. Local Discord database loaded.", StatusLevel.Success);
 				}
@@ -557,8 +563,8 @@ namespace DiscordQuestCompleter
 
 			foreach (var app in _discordCache)
 			{
-				int maxScore = CalculateMatchScore(query, app.Name);
-				foreach (var alias in app.Aliases)
+				int maxScore = CalculateMatchScore(query, app.name);
+				foreach (var alias in app.aliases)
 				{
 					int aliasScore = CalculateMatchScore(query, alias);
 					if (aliasScore > maxScore) maxScore = aliasScore;
@@ -567,11 +573,11 @@ namespace DiscordQuestCompleter
 				if (maxScore > 0)
 				{
 					var cleanPaths = new List<GameExecutable>();
-					foreach (var exec in app.Executables)
+					foreach (var exec in app.executables)
 					{
-						if (exec.Os == "win32")
+						if (exec.os == "win32")
 						{
-							string p = exec.Name.Replace("\\", "/");
+							string p = exec.name.Replace("\\", "/");
 							var valid = IsValidPath(p);
 							if (valid.IsValid || (!p.Contains("://") && p.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)))
 							{
@@ -581,14 +587,14 @@ namespace DiscordQuestCompleter
 					}
 					if (cleanPaths.Count > 0)
 					{
-						matchesWithScores.Add((new DiscordGame { Name = app.Name, Aliases = app.Aliases, Executables = cleanPaths.ToArray() }, maxScore));
+						matchesWithScores.Add((new DiscordGame { name = app.name, aliases = app.aliases, executables = cleanPaths.ToArray() }, maxScore));
 					}
 				}
 			}
 
 			var matches = matchesWithScores
 				.OrderByDescending(x => x.Score)
-				.ThenBy(x => x.Game.Name.Length)
+				.ThenBy(x => x.Game.name.Length)
 				.Select(x => x.Game)
 				.ToList();
 
@@ -604,11 +610,11 @@ namespace DiscordQuestCompleter
 			if (GamesList.SelectedItem is DiscordGame game)
 			{
 				var validPaths = new List<string>();
-				foreach (var exec in game.Executables)
+				foreach (var exec in game.executables)
 				{
-					if (exec.Os == "win32")
+					if (exec.os == "win32")
 					{
-						string p = exec.Name.Replace("\\", "/");
+						string p = exec.name.Replace("\\", "/");
 						var valid = IsValidPath(p);
 						if (valid.IsValid) validPaths.Add(p);
 						else if (!p.Contains("://") && p.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) validPaths.Add(p);
@@ -626,7 +632,7 @@ namespace DiscordQuestCompleter
 		{
 			if (GamesList.SelectedItem is DiscordGame game && PathsList.SelectedItem is string path)
 			{
-				ManualName.Text = game.Name;
+				ManualName.Text = game.name;
 				ManualPath.Text = path;
 				Tabs.SelectedIndex = 1;
 				UpdateStatus("Copied to manual entry.", StatusLevel.Success);
@@ -673,7 +679,7 @@ namespace DiscordQuestCompleter
 			{
 				if (GamesList.SelectedItem is DiscordGame game && PathsList.SelectedItem is string path)
 				{
-					gameName = game.Name;
+					gameName = game.name;
 					targetPath = path;
 				}
 				else
@@ -745,7 +751,7 @@ namespace DiscordQuestCompleter
 			var files = Directory.GetFiles(_baseDir, "*.exe", SearchOption.AllDirectories);
 			foreach (var file in files)
 			{
-				string relPath = Path.GetRelativePath(_baseDir, file).Replace("\\", "/");
+				string relPath = file.Substring(_baseDir.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Replace("\\", "/");
 				string txtPath = Path.ChangeExtension(file, ".txt");
 				string gameName = "";
 				if (File.Exists(txtPath))
