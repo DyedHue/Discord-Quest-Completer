@@ -76,6 +76,7 @@ namespace DiscordQuestCompleter
 		private bool _isDatabaseLoaded = false;
 		private bool _isSearchPlaceholder = true;
 		private DispatcherTimer _processTimer;
+		private DispatcherTimer _searchDebounceTimer;
 
 		public MainWindow()
 		{
@@ -100,6 +101,10 @@ namespace DiscordQuestCompleter
 			_processTimer.Interval = TimeSpan.FromSeconds(1);
 			_processTimer.Tick += ProcessTimer_Tick;
 			_processTimer.Start();
+
+			_searchDebounceTimer = new DispatcherTimer();
+			_searchDebounceTimer.Interval = TimeSpan.FromMilliseconds(300);
+			_searchDebounceTimer.Tick += SearchDebounceTimer_Tick;
 
 			// Ensure settings are saved when the window is closing
 			this.Closing += MainWindow_Closing;
@@ -418,22 +423,41 @@ namespace DiscordQuestCompleter
 			string qNormNoSpace = qNorm.Replace(" ", "");
 			string tNormNoSpace = tNorm.Replace(" ", "");
 
-			for (int i = 0; i < qNormNoSpace.Length; i++)
+			int qLen = qNormNoSpace.Length;
+			int tLen = tNormNoSpace.Length;
+
+			// Optimization: Dynamic Programming approach to Longest Common Substring
+			// This is O(N*M) and allocates 0 substrings, running orders of magnitude faster
+			if (qLen > 0 && tLen > 0)
 			{
-				for (int len = qNormNoSpace.Length - i; len > maxLcs; len--)
+				int[] prev = new int[tLen + 1];
+				int[] curr = new int[tLen + 1];
+
+				for (int i = 0; i < qLen; i++)
 				{
-					if (tNormNoSpace.Contains(qNormNoSpace.Substring(i, len)))
+					for (int j = 0; j < tLen; j++)
 					{
-						maxLcs = len;
-						break;
+						if (qNormNoSpace[i] == tNormNoSpace[j])
+						{
+							curr[j + 1] = prev[j] + 1;
+							if (curr[j + 1] > maxLcs) maxLcs = curr[j + 1];
+						}
+						else
+						{
+							curr[j + 1] = 0;
+						}
 					}
+					// Swap arrays
+					var temp = prev;
+					prev = curr;
+					curr = temp;
 				}
 			}
 
 			score += maxLcs * 5;
 
-			// Requires at least 3 character match sequence, OR a full token of length 3+ matched
-			if (maxLcs >= 3 || (tokensMatched > 0 && qTokens.Any(t => t.Length >= 3 && tNorm.Contains(t))))
+			// Removed the at least 3 character requirement logic
+			if (maxLcs > 0 || tokensMatched > 0)
 			{
 				return score;
 			}
@@ -466,7 +490,7 @@ namespace DiscordQuestCompleter
 					{
 						// User declined to fetch: restore placeholder state and move focus away from search box
 						_isSearchPlaceholder = true;
-						SearchBox.Text = "Type at least 3 characters to search...";
+						SearchBox.Text = "Type to search...";
 						SearchBox.Foreground = Brushes.Gray;
 						// Move focus to the tab control to avoid re-triggering the prompt
 						try { Tabs.Focus(); } catch { this.Focus(); }
@@ -481,7 +505,7 @@ namespace DiscordQuestCompleter
 			{
 				_isSearchPlaceholder = true;
 				SearchBox.Foreground = Brushes.Gray;
-				SearchBox.Text = "Type at least 3 characters to search...";
+				SearchBox.Text = "Type to search...";
 			}
 		}
 
@@ -551,12 +575,30 @@ namespace DiscordQuestCompleter
 		{
 			if (_isSearchPlaceholder) return;
 
-			string query = SearchBox.Text.Trim();
-			if (query.Length < 3)
+			_searchDebounceTimer.Stop();
+			_searchDebounceTimer.Start();
+		}
+
+		private void SearchDebounceTimer_Tick(object sender, EventArgs e)
+		{
+			_searchDebounceTimer.Stop();
+			PerformSearch(SearchBox.Text.Trim());
+		}
+
+		private void PerformSearch(string query)
+		{
+			// Removed the < 3 character restriction
+			if (string.IsNullOrEmpty(query))
 			{
 				GamesList.ItemsSource = null;
 				PathsList.ItemsSource = null;
 				return;
+			}
+
+			// Optimization: Cap query length to prevent lag on massive pasted strings
+			if (query.Length > 100)
+			{
+				query = query.Substring(0, 100);
 			}
 
 			var matchesWithScores = new List<(DiscordGame Game, int Score)>();
@@ -592,10 +634,12 @@ namespace DiscordQuestCompleter
 				}
 			}
 
+			// Optimization: Limit the rendered search results to 50 items to prevent UI freezing
 			var matches = matchesWithScores
 				.OrderByDescending(x => x.Score)
 				.ThenBy(x => x.Game.name.Length)
 				.Select(x => x.Game)
+				.Take(50)
 				.ToList();
 
 			GamesList.ItemsSource = matches;
