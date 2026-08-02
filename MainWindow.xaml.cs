@@ -787,6 +787,13 @@ namespace DiscordQuestCompleter
 
 		private void CreateGame_Click(object sender, RoutedEventArgs e)
 		{
+			// Force search to apply latest results before creating
+			if (_searchDebounceTimer.IsEnabled)
+			{
+				_searchDebounceTimer.Stop();
+				PerformSearch(SearchBox.Text.Trim());
+			}
+
 			string path = DoCreateGame();
 			if (path != null)
 			{
