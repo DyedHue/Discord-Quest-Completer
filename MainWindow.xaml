@@ -1,7 +1,7 @@
 <Window x:Class="DiscordQuestCompleter.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Discord Quest Completer" Height="750" Width="1100" Background="#1b1c1f" Foreground="#dbdee1"
+        Title="Discord Quest Completer" Height="750" Width="1200" Background="#1b1c1f" Foreground="#dbdee1"
 		Icon="app.ico"
         Loaded="Window_Loaded" PreviewKeyDown="Window_PreviewKeyDown">
 
@@ -69,11 +69,11 @@
 			<Setter Property="Foreground" Value="#dbdee1"/>
 			<Setter Property="Tag" Value="#949ba4"/>
 			<Setter Property="Padding" Value="0"/>
-			<Setter Property="Margin" Value="0,0,0,8"/>
+			<Setter Property="Margin" Value="2"/>
 			<Setter Property="Template">
 				<Setter.Value>
 					<ControlTemplate TargetType="ListBoxItem">
-						<Border BorderBrush="#3f4147" BorderThickness="1" CornerRadius="6" Background="{TemplateBinding Background}" Padding="15,10">
+						<Border BorderBrush="#3f4147" BorderThickness="1" CornerRadius="6" Background="{TemplateBinding Background}" Padding="5">
 							<ContentPresenter/>
 						</Border>
 						<ControlTemplate.Triggers>
@@ -198,40 +198,34 @@
 
 				<ListBox x:Name="GeneratedGamesList" Grid.Row="1" Background="Transparent" BorderThickness="0" 
                          ItemContainerStyle="{StaticResource GeneratedGameItemStyle}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                         SelectionChanged="GeneratedGamesList_SelectionChanged">
+                         SelectionChanged="GeneratedGamesList_SelectionChanged" MouseDoubleClick="GeneratedGamesList_MouseDoubleClick">
+					<ListBox.ItemsPanel>
+						<ItemsPanelTemplate>
+							<WrapPanel Orientation="Horizontal" />
+						</ItemsPanelTemplate>
+					</ListBox.ItemsPanel>
 					<ListBox.ItemTemplate>
 						<DataTemplate>
-							<Grid>
-								<Grid.ColumnDefinitions>
-									<ColumnDefinition Width="Auto"/>
-									<ColumnDefinition Width="*"/>
-									<ColumnDefinition Width="Auto"/>
-								</Grid.ColumnDefinitions>
-								<Grid Grid.Column="0" Width="48" Height="48" Margin="0,0,12,0">
-									<Border x:Name="IconBorder" BorderBrush="#3f4147" BorderThickness="1" CornerRadius="6" Background="Transparent" />
+							<StackPanel Width="80" Margin="5" ToolTip="{Binding RelativePath}">
+								<Grid Width="48" Height="48" Margin="0,0,0,8" HorizontalAlignment="Center">
+									<Border x:Name="IconBorder" BorderBrush="#3f4147" BorderThickness="1" CornerRadius="8" Background="Transparent" />
+									<Border CornerRadius="4" Padding="4,1" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,-6">
+										<Border.Style>
+											<Style TargetType="Border">
+												<Setter Property="Visibility" Value="Collapsed"/>
+												<Setter Property="Background" Value="#23a559"/>
+												<Style.Triggers>
+													<DataTrigger Binding="{Binding IsRunning}" Value="True">
+														<Setter Property="Visibility" Value="Visible"/>
+													</DataTrigger>
+												</Style.Triggers>
+											</Style>
+										</Border.Style>
+										<TextBlock Text="RUNNING" Foreground="White" FontWeight="Bold" FontSize="9" />
+									</Border>
 								</Grid>
-								<StackPanel Grid.Column="1" VerticalAlignment="Center">
-									<TextBlock Text="{Binding DisplayName}" FontWeight="Bold" FontSize="15" Margin="0,0,0,4" Foreground="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Foreground}"/>
-									<TextBlock Text="{Binding RelativePath}" FontSize="12" Foreground="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Tag}" TextWrapping="Wrap"/>
-								</StackPanel>
-								<Border Grid.Column="2" CornerRadius="4" Padding="6,2" VerticalAlignment="Center" Margin="10,0,0,0">
-									<Border.Style>
-										<Style TargetType="Border">
-											<Setter Property="Visibility" Value="Collapsed"/>
-											<Setter Property="Background" Value="#23a559"/>
-											<Style.Triggers>
-												<DataTrigger Binding="{Binding IsRunning}" Value="True">
-													<Setter Property="Visibility" Value="Visible"/>
-												</DataTrigger>
-												<DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=IsSelected}" Value="True">
-													<Setter Property="Background" Value="#1a7c43"/>
-												</DataTrigger>
-											</Style.Triggers>
-										</Style>
-									</Border.Style>
-									<TextBlock Text="RUNNING" Foreground="White" FontWeight="Bold" FontSize="10" />
-								</Border>
-							</Grid>
+								<TextBlock Text="{Binding DisplayName}" FontWeight="Bold" FontSize="12" TextAlignment="Center" TextWrapping="Wrap" Foreground="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Foreground}" MaxHeight="36" TextTrimming="CharacterEllipsis"/>
+							</StackPanel>
 							<DataTemplate.Triggers>
 								<DataTrigger Binding="{Binding HasIcon}" Value="True">
 									<Setter TargetName="IconBorder" Property="Background">
@@ -258,7 +252,7 @@
 
 						<Button Grid.Column="0" Content="Run" Margin="0,0,5,0" Background="#2d90fa" Click="RunGame_Click"/>
 						<Button Grid.Column="1" Content="✏️" Margin="5,0,5,0" Background="#ffc107" Foreground="Black" Click="EditGame_Click" ToolTip="Edit Name or Path"/>
-						<Button Grid.Column="2" Content="🗑️" Margin="5,0,0,0" Background="#ed4245" Click="DeleteGame_Click" ToolTip="Delete Entry"/>
+						<Button Grid.Column="2" Content="🗑️" Margin="5,0,0,0" Background="#ed4245" Click="DeleteGame_Click" ToolTip="Delete the dummy game"/>
 					</Grid>
 
 					<Button x:Name="StopButton" Content="Stop" Background="#ed4245" Visibility="Collapsed" Click="StopGame_Click"/>
@@ -268,28 +262,47 @@
 
 		<!-- Footer Settings -->
 		<Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,5" Background="#292a2e" CornerRadius="6" Padding="10,5">
-			<StackPanel>
-				<StackPanel Orientation="Horizontal" Margin="0,0,0,5">
-					<CheckBox x:Name="AutoRunCheckBox" Content="Run automatically after creating" Foreground="#dbdee1" Margin="0,0,25,0" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center" ToolTip="Launch a game automatically right after you create a dummy game"/>
-					<CheckBox x:Name="CloseOnLaunchCheckBox" Content="Close this window after launching" Foreground="#dbdee1" Margin="0,0,25,0" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center" ToolTip="Close this window automatically right after you launch a game"/>
-					<CheckBox x:Name="StartMinimizedCheckBox" Content="Start games minimized" Foreground="#dbdee1" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center" ToolTip="When you launch a game, the game window will automatically start as minimized"/>
+			<Grid>
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="*"/>
+					<ColumnDefinition Width="Auto"/>
+				</Grid.ColumnDefinitions>
+				<StackPanel Grid.Column="0">
+					<StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+						<CheckBox x:Name="AutoRunCheckBox" Content="Run automatically after creating" Foreground="#dbdee1" Margin="0,0,25,0" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center" ToolTip="Launch a game automatically right after you create a dummy game"/>
+						<CheckBox x:Name="CloseOnLaunchCheckBox" Content="Close this window after launching" Foreground="#dbdee1" Margin="0,0,25,0" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center" ToolTip="Close this window automatically right after you launch a game"/>
+						<CheckBox x:Name="StartMinimizedCheckBox" Content="Start games minimized" Foreground="#dbdee1" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center" ToolTip="When you launch a game, the game window will automatically start as minimized"/>
+					</StackPanel>
+					<StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+						<TextBlock Text="After " Foreground="#dbdee1" VerticalAlignment="Center"/>
+						<TextBox x:Name="TimerMinutesTextBox" Width="40" Height="20" Padding="0,-1,0,0" Text="15.5" Margin="5,0,5,0" TextChanged="Setting_Changed" VerticalAlignment="Center"/>
+						<TextBlock Text=" minutes:" Foreground="#dbdee1" VerticalAlignment="Center" Margin="0,0,15,0"/>
+						<CheckBox x:Name="CloseGameTimerCheckBox" Content="Close the game" Foreground="#dbdee1" Margin="0,0,25,0" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center" ToolTip="When you launch a game while this setting is on,&#x0a;the game window will automatically close after the specified time"/>
+					</StackPanel>
+					<StackPanel Orientation="Horizontal">
+						<Border Width="143"/>
+						<CheckBox x:Name="SendNotificationCheckBox" Content="Send a notification" Foreground="#dbdee1" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center" ToolTip="When you launch a game while this setting is on,&#x0a;you will receive a notification after the specified time"/>
+					</StackPanel>
 				</StackPanel>
-				<StackPanel Orientation="Horizontal" Margin="0,0,0,5">
-					<TextBlock Text="After " Foreground="#dbdee1" VerticalAlignment="Center"/>
-					<TextBox x:Name="TimerMinutesTextBox" Width="40" Height="20" Padding="0,-1,0,0" Text="15.5" Margin="5,0,5,0" TextChanged="Setting_Changed" VerticalAlignment="Center"/>
-					<TextBlock Text=" minutes:" Foreground="#dbdee1" VerticalAlignment="Center" Margin="0,0,15,0"/>
-					<CheckBox x:Name="CloseGameTimerCheckBox" Content="Close the game" Foreground="#dbdee1" Margin="0,0,25,0" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center" ToolTip="When you launch a game while this setting is on,&#x0a;the game window will automatically close after the specified time"/>
+				<StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,0,0">
+					<Button Content="📁" Background="#3f4147" ToolTip="Show the app's folder" Padding="8,4" Margin="0,0,0,4" Click="OpenAppFolder_Click"/>
+					<Button Background="#3f4147" Padding="4,4" Click="OpenGitHubReleases_Click" ToolTip="Go to the repository on Github">
+						<Image Source="/GitHub_Invertocat_White.png" Width="16" Height="16"/>
+					</Button>
 				</StackPanel>
-				<StackPanel Orientation="Horizontal">
-					<Border Width="143"/>
-					<CheckBox x:Name="SendNotificationCheckBox" Content="Send a notification" Foreground="#dbdee1" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center" ToolTip="When you launch a game while this setting is on,&#x0a;you will receive a notification after the specified time"/>
-				</StackPanel>
-			</StackPanel>
+			</Grid>
 		</Border>
 
 		<!-- Footer Status -->
-		<StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2">
-			<TextBlock x:Name="StatusText" Foreground="#949ba4" FontWeight="SemiBold"/>
-		</StackPanel>
+		<Grid Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2">
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="*"/>
+				<ColumnDefinition Width="Auto"/>
+			</Grid.ColumnDefinitions>
+			<TextBlock Grid.Column="0" x:Name="StatusText" Foreground="#949ba4" FontWeight="SemiBold"/>
+			<TextBlock Grid.Column="1" x:Name="UpdateText" Foreground="#7889e3" FontWeight="Bold" Cursor="Hand" Visibility="Collapsed" MouseLeftButtonUp="OpenGitHubReleases_Click">
+				<Underline>New update available!</Underline>
+			</TextBlock>
+		</Grid>
 	</Grid>
 </Window>

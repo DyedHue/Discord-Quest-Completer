@@ -67,6 +67,8 @@ namespace DiscordQuestCompleter
 
 	public partial class MainWindow : Window
 	{
+		private const string CurrentVersion = "v4.1.0";
+
 		// P/Invoke for minimizing windows
 		[DllImport("user32.dll")]
 		private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
@@ -299,10 +301,66 @@ namespace DiscordQuestCompleter
 
 		private void Window_Loaded(object sender, RoutedEventArgs e)
 		{
+			CheckForUpdatesAsync();
+
 			// Only focus the search box if the local search database was successfully loaded.
 			if (_isDatabaseLoaded)
 			{
 				SearchBox.Focus();
+			}
+		}
+
+		private async void CheckForUpdatesAsync()
+		{
+			try
+			{
+				using (HttpClient client = new HttpClient())
+				{
+					client.DefaultRequestHeaders.UserAgent.ParseAdd("DiscordQuestCompleter");
+					string json = await client.GetStringAsync("https://api.github.com/repos/dyedhue/Discord-Quest-Completer/releases/latest");
+
+					var match = Regex.Match(json, @"""tag_name"":\s*""([^""]+)""");
+					if (match.Success)
+					{
+						string latestVersion = match.Groups[1].Value;
+						if (latestVersion != CurrentVersion)
+						{
+							Dispatcher.Invoke(() =>
+							{
+								UpdateText.Visibility = Visibility.Visible;
+							});
+						}
+					}
+				}
+			}
+			catch { }
+		}
+
+		private void OpenAppFolder_Click(object sender, RoutedEventArgs e)
+		{
+			try
+			{
+				Process.Start("explorer.exe", Environment.CurrentDirectory);
+			}
+			catch (Exception ex)
+			{
+				UpdateStatus("Error opening folder: " + ex.Message, StatusLevel.Error);
+			}
+		}
+
+		private void OpenGitHubReleases_Click(object sender, RoutedEventArgs e)
+		{
+			try
+			{
+				Process.Start(new ProcessStartInfo
+				{
+					FileName = "https://github.com/dyedhue/Discord-Quest-Completer/releases/",
+					UseShellExecute = true
+				});
+			}
+			catch (Exception ex)
+			{
+				UpdateStatus("Error opening link: " + ex.Message, StatusLevel.Error);
 			}
 		}
 
@@ -898,6 +956,15 @@ namespace DiscordQuestCompleter
 		private void GeneratedGamesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
 		{
 			UpdateActionButtonsState();
+		}
+
+		private void GeneratedGamesList_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+		{
+			// Try to run the game when double clicked
+			if (GeneratedGamesList.SelectedItem is GeneratedGame game && !game.IsRunning)
+			{
+				RunExe(game.FullPath);
+			}
 		}
 
 		private void UpdateActionButtonsState()

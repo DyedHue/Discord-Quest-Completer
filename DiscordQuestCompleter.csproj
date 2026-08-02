@@ -13,5 +13,6 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="app.ico" />
+    <Resource Include="GitHub_Invertocat_White.png" />
   </ItemGroup>
 </Project>
