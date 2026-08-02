@@ -23,6 +23,10 @@ namespace DiscordQuestCompleter
 		public string FullPath { get; set; } = "";
 		public string RelativePath { get; set; } = "";
 		public string DisplayName { get; set; } = "";
+		public string Id { get; set; } = "";
+		public string Icon { get; set; } = "";
+		public string IconUrl { get; set; } = "";
+		public bool HasIcon => !string.IsNullOrEmpty(IconUrl);
 
 		private bool _isRunning;
 		public bool IsRunning
@@ -490,7 +494,7 @@ namespace DiscordQuestCompleter
 					{
 						// User declined to fetch: restore placeholder state and move focus away from search box
 						_isSearchPlaceholder = true;
-						SearchBox.Text = "Type to search...";
+						SearchBox.Text = "Search by name, game ID or game link";
 						SearchBox.Foreground = Brushes.Gray;
 						// Move focus to the tab control to avoid re-triggering the prompt
 						try { Tabs.Focus(); } catch { this.Focus(); }
@@ -505,7 +509,7 @@ namespace DiscordQuestCompleter
 			{
 				_isSearchPlaceholder = true;
 				SearchBox.Foreground = Brushes.Gray;
-				SearchBox.Text = "Type to search...";
+				SearchBox.Text = "Search by name, game ID or game link";
 			}
 		}
 
@@ -596,40 +600,80 @@ namespace DiscordQuestCompleter
 			}
 
 			// Optimization: Cap query length to prevent lag on massive pasted strings
-			if (query.Length > 100)
+			if (query.Length > 200)
 			{
-				query = query.Substring(0, 100);
+				query = query.Substring(0, 200);
+			}
+
+			bool isIdSearch = false;
+			string searchId = null;
+
+			if (query.StartsWith("https://discord.com/games/"))
+			{
+				searchId = query.Substring("https://discord.com/games/".Length).Trim();
+				isIdSearch = true;
+			}
+			else if (Regex.IsMatch(query, @"^\d+$"))
+			{
+				searchId = query.Trim();
+				isIdSearch = true;
 			}
 
 			var matchesWithScores = new List<(DiscordGame Game, int Score)>();
 
 			foreach (var app in _discordCache)
 			{
-				int maxScore = CalculateMatchScore(query, app.name);
-				foreach (var alias in app.aliases)
+				if (isIdSearch)
 				{
-					int aliasScore = CalculateMatchScore(query, alias);
-					if (aliasScore > maxScore) maxScore = aliasScore;
-				}
-
-				if (maxScore > 0)
-				{
-					var cleanPaths = new List<GameExecutable>();
-					foreach (var exec in app.executables)
+					if (app.id == searchId)
 					{
-						if (exec.os == "win32")
+						var cleanPaths = new List<GameExecutable>();
+						foreach (var exec in app.executables)
 						{
-							string p = exec.name.Replace("\\", "/");
-							var valid = IsValidPath(p);
-							if (valid.IsValid || (!p.Contains("://") && p.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)))
+							if (exec.os == "win32")
 							{
-								cleanPaths.Add(exec);
+								string p = exec.name.Replace("\\", "/");
+								var valid = IsValidPath(p);
+								if (valid.IsValid || (!p.Contains("://") && p.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)))
+								{
+									cleanPaths.Add(exec);
+								}
 							}
 						}
+						if (cleanPaths.Count > 0)
+						{
+							matchesWithScores.Add((new DiscordGame { id = app.id, icon_hash = app.icon_hash, name = app.name, aliases = app.aliases, executables = cleanPaths.ToArray() }, 1000));
+						}
 					}
-					if (cleanPaths.Count > 0)
+				}
+				else
+				{
+					int maxScore = CalculateMatchScore(query, app.name);
+					foreach (var alias in app.aliases)
 					{
-						matchesWithScores.Add((new DiscordGame { name = app.name, aliases = app.aliases, executables = cleanPaths.ToArray() }, maxScore));
+						int aliasScore = CalculateMatchScore(query, alias);
+						if (aliasScore > maxScore) maxScore = aliasScore;
+					}
+
+					if (maxScore > 0)
+					{
+						var cleanPaths = new List<GameExecutable>();
+						foreach (var exec in app.executables)
+						{
+							if (exec.os == "win32")
+							{
+								string p = exec.name.Replace("\\", "/");
+								var valid = IsValidPath(p);
+								if (valid.IsValid || (!p.Contains("://") && p.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)))
+								{
+									cleanPaths.Add(exec);
+								}
+							}
+						}
+						if (cleanPaths.Count > 0)
+						{
+							matchesWithScores.Add((new DiscordGame { id = app.id, icon_hash = app.icon_hash, name = app.name, aliases = app.aliases, executables = cleanPaths.ToArray() }, maxScore));
+						}
 					}
 				}
 			}
@@ -718,6 +762,8 @@ namespace DiscordQuestCompleter
 		{
 			string gameName = "";
 			string targetPath = "";
+			string gameId = "";
+			string gameIcon = "";
 
 			if (Tabs.SelectedIndex == 0) // Auto Search
 			{
@@ -725,6 +771,8 @@ namespace DiscordQuestCompleter
 				{
 					gameName = game.name;
 					targetPath = path;
+					gameId = game.id;
+					gameIcon = game.icon_hash;
 				}
 				else
 				{
@@ -743,10 +791,10 @@ namespace DiscordQuestCompleter
 				}
 			}
 
-			return ProcessCreation(gameName, targetPath);
+			return ProcessCreation(gameName, targetPath, gameId, gameIcon);
 		}
 
-		private string ProcessCreation(string gameName, string targetPath)
+		private string ProcessCreation(string gameName, string targetPath, string gameId, string gameIcon)
 		{
 			if (string.IsNullOrEmpty(targetPath)) return null;
 
@@ -765,7 +813,7 @@ namespace DiscordQuestCompleter
 			bool defaultExistedBefore = File.Exists(_defaultExePath);
 			UpdateStatus(defaultExistedBefore ? "Creating game..." : "Compiling base executable (one-time)...", StatusLevel.Neutral);
 
-			if (DummyCompiler.CreateGameExe(_defaultExePath, fullPath, gameName, targetPath, out string error))
+			if (DummyCompiler.CreateGameExe(_defaultExePath, fullPath, gameName, targetPath, gameId, gameIcon, out string error))
 			{
 				UpdateStatus("Successfully created: " + Path.GetFileName(fullPath), StatusLevel.Success);
 				LoadGames(fullPath);
@@ -798,11 +846,15 @@ namespace DiscordQuestCompleter
 				string relPath = file.Substring(_baseDir.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Replace("\\", "/");
 				string txtPath = Path.ChangeExtension(file, ".txt");
 				string gameName = "";
+				string gameId = "";
+				string gameIcon = "";
 				if (File.Exists(txtPath))
 				{
-					// Line 1 = game name, Line 2 = relative path (backwards-compat: single-line = name only)
+					// Line 1 = game name, Line 2 = relative path, Line 3 = id, Line 4 = icon
 					var lines = File.ReadAllLines(txtPath);
 					if (lines.Length > 0) gameName = lines[0].Trim();
+					if (lines.Length > 2) gameId = lines[2].Trim();
+					if (lines.Length > 3) gameIcon = lines[3].Trim();
 				}
 				string displayName = string.IsNullOrEmpty(gameName) ? "Unnamed Game" : gameName;
 
@@ -810,7 +862,10 @@ namespace DiscordQuestCompleter
 				{
 					FullPath = file,
 					RelativePath = relPath,
-					DisplayName = displayName
+					DisplayName = displayName,
+					Id = gameId,
+					Icon = gameIcon,
+					IconUrl = (!string.IsNullOrEmpty(gameId) && !string.IsNullOrEmpty(gameIcon)) ? $"https://cdn.discordapp.com/app-icons/{gameId}/{gameIcon}.png?size=64" : ""
 				};
 				GeneratedGamesList.Items.Add(game);
 
@@ -1009,7 +1064,7 @@ namespace DiscordQuestCompleter
 						if (pathChanged)
 						{
 							// Path changed: copy exe to new location, write new txt, delete old files
-							if (DummyCompiler.CreateGameExe(_defaultExePath, newFullPath, newName, newPath, out string createError))
+							if (DummyCompiler.CreateGameExe(_defaultExePath, newFullPath, newName, newPath, game.Id, game.Icon, out string createError))
 							{
 								if (IsPathInBaseDir(game.FullPath))
 								{
@@ -1029,7 +1084,7 @@ namespace DiscordQuestCompleter
 						else
 						{
 							// Only name changed: just rewrite the .txt file — no recompile needed
-							File.WriteAllLines(newTxtPath, new[] { newName ?? "", newPath });
+							File.WriteAllLines(newTxtPath, new[] { newName ?? "", newPath ?? "", game.Id ?? "", game.Icon ?? "" });
 							game.DisplayName = string.IsNullOrEmpty(newName) ? "Unnamed Game" : newName;
 							UpdateStatus("Game renamed successfully.", StatusLevel.Success);
 							LoadGames(game.FullPath);

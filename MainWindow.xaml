@@ -132,7 +132,7 @@
 						</Grid.ColumnDefinitions>
 
 						<TextBox x:Name="SearchBox" Grid.Column="0" 
-								 Text="Type at least 3 characters to search..." Foreground="Gray"
+								 Text="Search by name, game id or game link" Foreground="Gray"
 								 GotFocus="SearchBox_GotFocus" LostFocus="SearchBox_LostFocus"
 								 TextChanged="SearchBox_TextChanged"/>
 
@@ -203,14 +203,18 @@
 						<DataTemplate>
 							<Grid>
 								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="Auto"/>
 									<ColumnDefinition Width="*"/>
 									<ColumnDefinition Width="Auto"/>
 								</Grid.ColumnDefinitions>
-								<StackPanel Grid.Column="0">
+								<Grid Grid.Column="0" Width="48" Height="48" Margin="0,0,12,0">
+									<Border x:Name="IconBorder" BorderBrush="#3f4147" BorderThickness="1" CornerRadius="6" Background="Transparent" />
+								</Grid>
+								<StackPanel Grid.Column="1" VerticalAlignment="Center">
 									<TextBlock Text="{Binding DisplayName}" FontWeight="Bold" FontSize="15" Margin="0,0,0,4" Foreground="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Foreground}"/>
 									<TextBlock Text="{Binding RelativePath}" FontSize="12" Foreground="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Tag}" TextWrapping="Wrap"/>
 								</StackPanel>
-								<Border Grid.Column="1" CornerRadius="4" Padding="6,2" VerticalAlignment="Center" Margin="10,0,0,0">
+								<Border Grid.Column="2" CornerRadius="4" Padding="6,2" VerticalAlignment="Center" Margin="10,0,0,0">
 									<Border.Style>
 										<Style TargetType="Border">
 											<Setter Property="Visibility" Value="Collapsed"/>
@@ -228,6 +232,15 @@
 									<TextBlock Text="RUNNING" Foreground="White" FontWeight="Bold" FontSize="10" />
 								</Border>
 							</Grid>
+							<DataTemplate.Triggers>
+								<DataTrigger Binding="{Binding HasIcon}" Value="True">
+									<Setter TargetName="IconBorder" Property="Background">
+										<Setter.Value>
+											<ImageBrush ImageSource="{Binding IconUrl}" Stretch="UniformToFill"/>
+										</Setter.Value>
+									</Setter>
+								</DataTrigger>
+							</DataTemplate.Triggers>
 						</DataTemplate>
 					</ListBox.ItemTemplate>
 				</ListBox>

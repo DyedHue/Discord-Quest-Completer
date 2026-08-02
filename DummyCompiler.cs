@@ -281,7 +281,7 @@ class DummyGame : Form
 		/// then writes a .txt metadata file with the game name on line 1 and the relative
 		/// path on line 2. Compiles game_template.exe first if it doesn't exist yet.
 		/// </summary>
-		public static bool CreateGameExe(string defaultExePath, string exePath, string gameName, string targetRelPath, out string error)
+		public static bool CreateGameExe(string defaultExePath, string exePath, string gameName, string targetRelPath, string id, string icon, out string error)
 		{
 			error = "";
 
@@ -297,9 +297,9 @@ class DummyGame : Form
 				// Copy the generic exe to the desired location
 				File.Copy(defaultExePath, exePath, overwrite: true);
 
-				// Write the metadata txt file: line 1 = name, line 2 = relative path
+				// Write the metadata txt file: line 1 = name, line 2 = relative path, line 3 = id, line 4 = icon
 				string txtPath = Path.ChangeExtension(exePath, ".txt");
-				File.WriteAllLines(txtPath, new[] { gameName ?? "", targetRelPath ?? "" });
+				File.WriteAllLines(txtPath, new[] { gameName ?? "", targetRelPath ?? "", id ?? "", icon ?? "" });
 
 				return true;
 			}

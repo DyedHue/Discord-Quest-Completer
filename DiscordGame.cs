@@ -2,16 +2,18 @@ using System;
 
 namespace DiscordQuestCompleter
 {
-    public class DiscordGame
-    {
-        public string name { get; set; } = "";
-        public string[] aliases { get; set; } = new string[0];
-        public GameExecutable[] executables { get; set; } = new GameExecutable[0];
-    }
+	public class DiscordGame
+	{
+		public string id { get; set; } = "";
+		public string icon_hash { get; set; } = "";
+		public string name { get; set; } = "";
+		public string[] aliases { get; set; } = new string[0];
+		public GameExecutable[] executables { get; set; } = new GameExecutable[0];
+	}
 
-    public class GameExecutable
-    {
-        public string name { get; set; } = "";
-        public string os { get; set; } = "";
-    }
+	public class GameExecutable
+	{
+		public string name { get; set; } = "";
+		public string os { get; set; } = "";
+	}
 }
