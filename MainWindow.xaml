@@ -165,7 +165,7 @@
 							<ColumnDefinition Width="5*"/>
 							<ColumnDefinition Width="*"/>
 						</Grid.ColumnDefinitions>
-						<Button Grid.Column="0" Margin="0,0,5,0" Content="Create Game (Enter)" Background="#3ba55c" Click="CreateGame_Click" Padding="10,2"/>
+						<Button Grid.Column="0" Margin="0,0,5,0" Content="Create Dummy Game (Enter)" Background="#3ba55c" Click="CreateGame_Click" Padding="10,2"/>
 						<Button Grid.Column="1" Margin="5,0,0,0" Content="✏️" Background="#6c757d" Click="CopyToManual_Click" ToolTip="Edit in Manual Fields"/>
 					</Grid>
 				</Grid>
@@ -180,7 +180,7 @@
 					<TextBlock Text="EXE Path (Required):" Margin="0,0,0,5" FontWeight="Bold"/>
 					<TextBox x:Name="ManualPath" Margin="0,0,0,20"/>
 
-					<Button Content="Create Game (Enter)" Background="#3ba55c" Click="CreateGame_Click" Padding="10,12"/>
+					<Button Content="Create Dummy Game (Enter)" Background="#3ba55c" Click="CreateGame_Click" Padding="10,12"/>
 				</StackPanel>
 			</TabItem>
 		</TabControl>
@@ -257,19 +257,19 @@
 		<Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,5" Background="#292a2e" CornerRadius="6" Padding="10,5">
 			<StackPanel>
 				<StackPanel Orientation="Horizontal" Margin="0,0,0,5">
-					<CheckBox x:Name="AutoRunCheckBox" Content="Run automatically after creating" Foreground="#dbdee1" Margin="0,0,25,0" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center"/>
-					<CheckBox x:Name="CloseOnLaunchCheckBox" Content="Close this window after launching" Foreground="#dbdee1" Margin="0,0,25,0" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center"/>
-					<CheckBox x:Name="StartMinimizedCheckBox" Content="Start games minimized" Foreground="#dbdee1" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center"/>
+					<CheckBox x:Name="AutoRunCheckBox" Content="Run automatically after creating" Foreground="#dbdee1" Margin="0,0,25,0" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center" ToolTip="Launch a game automatically right after you create a dummy game"/>
+					<CheckBox x:Name="CloseOnLaunchCheckBox" Content="Close this window after launching" Foreground="#dbdee1" Margin="0,0,25,0" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center" ToolTip="Close this window automatically right after you launch a game"/>
+					<CheckBox x:Name="StartMinimizedCheckBox" Content="Start games minimized" Foreground="#dbdee1" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center" ToolTip="When you launch a game, the game window will automatically start as minimized"/>
 				</StackPanel>
 				<StackPanel Orientation="Horizontal" Margin="0,0,0,5">
 					<TextBlock Text="After " Foreground="#dbdee1" VerticalAlignment="Center"/>
 					<TextBox x:Name="TimerMinutesTextBox" Width="40" Height="20" Padding="0,-1,0,0" Text="15.5" Margin="5,0,5,0" TextChanged="Setting_Changed" VerticalAlignment="Center"/>
 					<TextBlock Text=" minutes:" Foreground="#dbdee1" VerticalAlignment="Center" Margin="0,0,15,0"/>
-					<CheckBox x:Name="CloseGameTimerCheckBox" Content="Close the game" Foreground="#dbdee1" Margin="0,0,25,0" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center"/>
+					<CheckBox x:Name="CloseGameTimerCheckBox" Content="Close the game" Foreground="#dbdee1" Margin="0,0,25,0" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center" ToolTip="When you launch a game while this setting is on,&#x0a;the game window will automatically close after the specified time"/>
 				</StackPanel>
 				<StackPanel Orientation="Horizontal">
 					<Border Width="143"/>
-					<CheckBox x:Name="SendNotificationCheckBox" Content="Send a notification" Foreground="#dbdee1" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center"/>
+					<CheckBox x:Name="SendNotificationCheckBox" Content="Send a notification" Foreground="#dbdee1" Checked="Setting_Changed" Unchecked="Setting_Changed" VerticalAlignment="Center" ToolTip="When you launch a game while this setting is on,&#x0a;you will receive a notification after the specified time"/>
 				</StackPanel>
 			</StackPanel>
 		</Border>
