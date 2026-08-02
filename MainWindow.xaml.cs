@@ -81,7 +81,6 @@ namespace DiscordQuestCompleter
 		private AppSettings _settings = new AppSettings();
 		private bool _isDatabaseLoaded = false;
 		private bool _isSearchPlaceholder = true;
-		private DispatcherTimer _processTimer;
 		private DispatcherTimer _searchDebounceTimer;
 
 		public MainWindow()
@@ -102,11 +101,6 @@ namespace DiscordQuestCompleter
 			LoadGames();
 			// Try to load local database if present. Do not auto-fetch from network to save users' data.
 			LoadLocalDatabase();
-
-			_processTimer = new DispatcherTimer();
-			_processTimer.Interval = TimeSpan.FromSeconds(1);
-			_processTimer.Tick += ProcessTimer_Tick;
-			_processTimer.Start();
 
 			_searchDebounceTimer = new DispatcherTimer();
 			_searchDebounceTimer.Interval = TimeSpan.FromMilliseconds(300);
@@ -232,7 +226,12 @@ namespace DiscordQuestCompleter
 			SaveSettings();
 		}
 
-		private void ProcessTimer_Tick(object sender, EventArgs e)
+		private void Window_Activated(object sender, EventArgs e)
+		{
+			UpdateRunningStatus();
+		}
+
+		private void Window_PreviewMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
 		{
 			UpdateRunningStatus();
 		}
@@ -260,42 +259,69 @@ namespace DiscordQuestCompleter
 
 		private enum StatusLevel { Neutral, Success, Error }
 
-		private void UpdateRunningStatus()
+		private bool _isUpdatingStatus = false;
+
+		private async void UpdateRunningStatus()
 		{
-			bool anyChanged = false;
-			var runningPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			if (_isUpdatingStatus) return;
+			_isUpdatingStatus = true;
 
 			try
 			{
-				var processes = Process.GetProcesses();
-				foreach (var p in processes)
+				bool anyChanged = false;
+				var gamesToCheck = new List<GeneratedGame>();
+				foreach (GeneratedGame game in GeneratedGamesList.Items)
 				{
-					try
+					gamesToCheck.Add(game);
+				}
+
+				if (gamesToCheck.Count == 0) return;
+
+				var runningPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+				await Task.Run(() =>
+				{
+					foreach (var game in gamesToCheck)
 					{
-						var path = p.MainModule?.FileName;
-						if (path != null && path.StartsWith(_baseDir, StringComparison.OrdinalIgnoreCase))
+						try
 						{
-							runningPaths.Add(path);
+							var processes = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(game.FullPath));
+							foreach (var p in processes)
+							{
+								try
+								{
+									var path = p.MainModule?.FileName;
+									if (path != null && path.Equals(game.FullPath, StringComparison.OrdinalIgnoreCase))
+									{
+										runningPaths.Add(game.FullPath);
+										break;
+									}
+								}
+								catch { }
+							}
 						}
+						catch { }
 					}
-					catch { } // Ignore access denied exceptions
-				}
-			}
-			catch { }
+				});
 
-			foreach (GeneratedGame game in GeneratedGamesList.Items)
-			{
-				bool isRunning = runningPaths.Contains(game.FullPath);
-				if (game.IsRunning != isRunning)
+				foreach (var game in gamesToCheck)
 				{
-					game.IsRunning = isRunning;
-					anyChanged = true;
+					bool isRunning = runningPaths.Contains(game.FullPath);
+					if (game.IsRunning != isRunning)
+					{
+						game.IsRunning = isRunning;
+						anyChanged = true;
+					}
+				}
+
+				if (anyChanged)
+				{
+					UpdateActionButtonsState();
 				}
 			}
-
-			if (anyChanged)
+			finally
 			{
-				UpdateActionButtonsState();
+				_isUpdatingStatus = false;
 			}
 		}
 
