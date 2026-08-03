@@ -7,6 +7,9 @@ So, you can just create that game's path structure and run the exe to complete d
 >[!NOTE]
 >**This app helps you automate the task of finding the correct path and creating a dummy exe there and run it easily.**  
 
+#What it ISN'T
+This app does not instantly finish your quests or finish video watching quests without having to watch them. It only helps you start a dummy game process without having the game.
+
 # How to use
 ## Method 1: Auto
 1. Find your desired game in the Search bar and select it (You can also choose from multiple valid paths or go with the default)
