@@ -14,6 +14,88 @@
 			<Setter Property="FontWeight" Value="SemiBold"/>
 			<Setter Property="Cursor" Value="Hand"/>
 		</Style>
+		<Style TargetType="{x:Type CheckBox}">
+			<Setter Property="Foreground" Value="#dbdee1"/>
+			<Setter Property="Cursor" Value="Hand"/>
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="{x:Type CheckBox}">
+						<StackPanel Orientation="Horizontal">
+							<Grid Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,8,0">
+								<Border x:Name="CheckBoxBorder" Background="#292a2e" BorderBrush="#6b6f78" BorderThickness="1"/>
+								<Path x:Name="CheckMark" Data="M 3,8 L 6.5,11.5 L 13,4.5" Stroke="White" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Visibility="Collapsed"/>
+							</Grid>
+							<ContentPresenter VerticalAlignment="Center" RecognizesAccessKey="True" TextElement.Foreground="{TemplateBinding Foreground}"/>
+						</StackPanel>
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsChecked" Value="True">
+								<Setter TargetName="CheckBoxBorder" Property="Background" Value="#5865f2"/>
+								<Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="#5865f2"/>
+								<Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+							</Trigger>
+							<MultiTrigger>
+								<MultiTrigger.Conditions>
+									<Condition Property="IsMouseOver" Value="True"/>
+									<Condition Property="IsChecked" Value="False"/>
+								</MultiTrigger.Conditions>
+								<Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="#949ba4"/>
+							</MultiTrigger>
+							<Trigger Property="IsEnabled" Value="False">
+								<Setter Property="Opacity" Value="0.5"/>
+							</Trigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+		<Style TargetType="{x:Type ScrollBar}">
+			<Setter Property="Background" Value="#202126"/>
+			<Setter Property="Foreground" Value="#555860"/>
+			<Setter Property="Width" Value="14"/>
+			<Setter Property="Focusable" Value="False"/>
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="{x:Type ScrollBar}">
+						<Grid Background="{TemplateBinding Background}">
+							<Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}" IsDirectionReversed="True">
+								<Track.DecreaseRepeatButton>
+									<RepeatButton x:Name="DecreasePage" Command="{x:Static ScrollBar.PageUpCommand}" Opacity="0" IsTabStop="False" Focusable="False"/>
+								</Track.DecreaseRepeatButton>
+								<Track.Thumb>
+									<Thumb Background="{TemplateBinding Foreground}" Margin="2" MinWidth="8" MinHeight="8">
+										<Thumb.Template>
+											<ControlTemplate TargetType="{x:Type Thumb}">
+												<Border x:Name="ThumbBorder" Background="{TemplateBinding Background}" CornerRadius="4"/>
+												<ControlTemplate.Triggers>
+													<Trigger Property="IsMouseOver" Value="True">
+														<Setter TargetName="ThumbBorder" Property="Background" Value="#737781"/>
+													</Trigger>
+													<Trigger Property="IsDragging" Value="True">
+														<Setter TargetName="ThumbBorder" Property="Background" Value="#858a94"/>
+													</Trigger>
+												</ControlTemplate.Triggers>
+											</ControlTemplate>
+										</Thumb.Template>
+									</Thumb>
+								</Track.Thumb>
+								<Track.IncreaseRepeatButton>
+									<RepeatButton x:Name="IncreasePage" Command="{x:Static ScrollBar.PageDownCommand}" Opacity="0" IsTabStop="False" Focusable="False"/>
+								</Track.IncreaseRepeatButton>
+							</Track>
+						</Grid>
+						<ControlTemplate.Triggers>
+							<Trigger Property="Orientation" Value="Horizontal">
+								<Setter Property="Width" Value="Auto"/>
+								<Setter Property="Height" Value="14"/>
+								<Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False"/>
+								<Setter TargetName="DecreasePage" Property="Command" Value="{x:Static ScrollBar.PageLeftCommand}"/>
+								<Setter TargetName="IncreasePage" Property="Command" Value="{x:Static ScrollBar.PageRightCommand}"/>
+							</Trigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
 		<!-- TextBox Style -->
 		<Style TargetType="TextBox">
 			<Setter Property="Background" Value="#1b1c1f"/>
