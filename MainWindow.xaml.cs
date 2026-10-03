@@ -1050,8 +1050,8 @@ namespace DiscordQuestCompleter
 				openLocationItem.Click += OpenGameLocation_Click;
 				var editGameItem = new MenuItem { Header = "Edit name or path" };
 				editGameItem.Click += EditGame_Click;
-				contextMenu.Items.Add(openLocationItem);
 				contextMenu.Items.Add(editGameItem);
+				contextMenu.Items.Add(openLocationItem);
 				item.ContextMenu = contextMenu;
 			}
 		}
