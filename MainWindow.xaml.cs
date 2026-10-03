@@ -385,6 +385,7 @@ namespace DiscordQuestCompleter
 							});
 						}
 					}
+
 				}
 			}
 			catch { }
@@ -464,6 +465,7 @@ namespace DiscordQuestCompleter
 							e.Handled = true;
 						}
 					}
+
 				}
 			}
 		}
@@ -1346,6 +1348,60 @@ namespace DiscordQuestCompleter
 				{
 					MessageBox.Show("Failed to delete file. It might be running.\n" + ex.Message, "Delete Error");
 				}
+			}
+		}
+
+		private void GeneratedGamesMenu_Click(object sender, RoutedEventArgs e)
+		{
+			if (sender is Button button && button.ContextMenu != null)
+			{
+				button.ContextMenu.PlacementTarget = button;
+				button.ContextMenu.IsOpen = true;
+			}
+		}
+
+		private void DeleteAllGames_Click(object sender, RoutedEventArgs e)
+		{
+			var result = MessageBox.Show(
+				"This will permanently delete everything inside:\n\n" + Path.GetFullPath(_baseDir) + "\n\nThis action cannot be undone. Continue?",
+				"Delete All Generated Games",
+				MessageBoxButton.YesNo,
+				MessageBoxImage.Warning,
+				MessageBoxResult.No);
+			if (result != MessageBoxResult.Yes) return;
+
+			foreach (GeneratedGame game in GeneratedGamesList.Items)
+			{
+				if (game.IsRunning || IsGameActuallyRunning(game.FullPath))
+				{
+					MessageBox.Show("Stop all running games before deleting the generated games folder contents.", "Games Are Running", MessageBoxButton.OK, MessageBoxImage.Warning);
+					return;
+				}
+			}
+
+			try
+			{
+				string baseDirectory = Path.GetFullPath(_baseDir);
+				foreach (string entry in Directory.GetFileSystemEntries(baseDirectory))
+				{
+					if (Directory.Exists(entry))
+					{
+						Directory.Delete(entry, true);
+					}
+					else
+					{
+						File.Delete(entry);
+					}
+				}
+
+				LoadGames();
+				UpdateStatus("Deleted all generated games.", StatusLevel.Success);
+			}
+			catch (Exception ex)
+			{
+				LoadGames();
+				UpdateStatus("Failed to delete generated games.", StatusLevel.Error);
+				MessageBox.Show("Failed to delete everything inside the generated games folder.\n" + ex.Message, "Delete Error", MessageBoxButton.OK, MessageBoxImage.Error);
 			}
 		}
 	}

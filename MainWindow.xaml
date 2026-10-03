@@ -194,7 +194,16 @@
 					<RowDefinition Height="Auto"/>
 				</Grid.RowDefinitions>
 
-				<TextBlock Grid.Row="0" Text="Generated Dummy Games" FontSize="18" FontWeight="Bold" Margin="0,0,0,10"/>
+				<StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,10">
+					<TextBlock Text="Generated Dummy Games" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+					<Button Content="⋮" Margin="10,0,0,0" Padding="6,2" FontSize="18" Background="#3f4147" ToolTip="More options" Click="GeneratedGamesMenu_Click">
+						<Button.ContextMenu>
+							<ContextMenu Placement="Bottom">
+								<MenuItem Header="Delete All" Click="DeleteAllGames_Click"/>
+							</ContextMenu>
+						</Button.ContextMenu>
+					</Button>
+				</StackPanel>
 
 				<ListBox x:Name="GeneratedGamesList" Grid.Row="1" Background="Transparent" BorderThickness="0" 
                          ItemContainerStyle="{StaticResource GeneratedGameItemStyle}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
