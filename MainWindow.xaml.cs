@@ -80,6 +80,8 @@ namespace DiscordQuestCompleter
 		private readonly string _settingsPath;
 		private AppSettings _settings = new AppSettings();
 		private bool _isDatabaseLoaded = false;
+		private bool _isDatabaseLoading = false;
+		private string _pendingEnterQuery;
 		private bool _isSearchPlaceholder = true;
 		private DispatcherTimer _searchDebounceTimer;
 
@@ -99,8 +101,6 @@ namespace DiscordQuestCompleter
 
 			Directory.CreateDirectory(_baseDir);
 			LoadGames();
-			// Try to load local database if present. Do not auto-fetch from network to save users' data.
-			LoadLocalDatabase();
 
 			_searchDebounceTimer = new DispatcherTimer();
 			_searchDebounceTimer.Interval = TimeSpan.FromMilliseconds(300);
@@ -325,14 +325,42 @@ namespace DiscordQuestCompleter
 			}
 		}
 
-		private void Window_Loaded(object sender, RoutedEventArgs e)
+		private async void Window_Loaded(object sender, RoutedEventArgs e)
 		{
 			CheckForUpdatesAsync();
+			_isDatabaseLoading = true;
+			SearchBox.Focus();
+			UpdateStatus("Loading local Discord database...", StatusLevel.Neutral);
+			await LoadLocalDatabaseAsync();
+			_isDatabaseLoading = false;
 
-			// Only focus the search box if the local search database was successfully loaded.
-			if (_isDatabaseLoaded)
+			if (_searchDebounceTimer.IsEnabled)
 			{
-				SearchBox.Focus();
+				_searchDebounceTimer.Stop();
+			}
+
+			string currentQuery = SearchBox.Text.Trim();
+			if (_pendingEnterQuery != null)
+			{
+				string enterQuery = _pendingEnterQuery;
+				_pendingEnterQuery = null;
+				if (_isDatabaseLoaded)
+				{
+					PerformSearch(enterQuery);
+					CreateSelectedGame();
+					if (!string.Equals(currentQuery, enterQuery, StringComparison.Ordinal))
+					{
+						PerformSearch(currentQuery);
+					}
+				}
+				else
+				{
+					PerformSearch(currentQuery);
+				}
+			}
+			else
+			{
+				PerformSearch(currentQuery);
 			}
 		}
 
@@ -394,6 +422,14 @@ namespace DiscordQuestCompleter
 		{
 			if (e.Key == Key.Enter)
 			{
+				if (Tabs.SelectedIndex == 0 && _isDatabaseLoading && !_isSearchPlaceholder && !string.IsNullOrWhiteSpace(SearchBox.Text))
+				{
+					_pendingEnterQuery = SearchBox.Text.Trim();
+					_searchDebounceTimer.Stop();
+					e.Handled = true;
+					return;
+				}
+
 				CreateGame_Click(null, null);
 				e.Handled = true;
 			}
@@ -567,7 +603,7 @@ namespace DiscordQuestCompleter
 				_isSearchPlaceholder = false;
 
 				// If we don't have a loaded DB and local file doesn't exist, prompt user to fetch
-				if ((_discordCache == null || _discordCache.Count == 0) && !File.Exists(_localDbPath))
+				if (!_isDatabaseLoading && (_discordCache == null || _discordCache.Count == 0) && !File.Exists(_localDbPath))
 				{
 					var result = MessageBox.Show("Search database not found. Do you want to fetch? (~12 MB download)", "Search DB Missing", MessageBoxButton.YesNo);
 					if (result == MessageBoxResult.Yes)
@@ -637,15 +673,19 @@ namespace DiscordQuestCompleter
 			}
 		}
 
-		private void LoadLocalDatabase()
+		private async Task LoadLocalDatabaseAsync()
 		{
 			try
 			{
 				if (File.Exists(_localDbPath))
 				{
-					string json = File.ReadAllText(_localDbPath);
-					var serializer = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
-					_discordCache = serializer.Deserialize<List<DiscordGame>>(json) ?? new List<DiscordGame>();
+					var games = await Task.Run(() =>
+					{
+						string json = File.ReadAllText(_localDbPath);
+						var serializer = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+						return serializer.Deserialize<List<DiscordGame>>(json) ?? new List<DiscordGame>();
+					});
+					_discordCache = games;
 					_isDatabaseLoaded = true;
 					UpdateStatus("Ready. Local Discord database loaded.", StatusLevel.Success);
 				}
@@ -820,6 +860,11 @@ namespace DiscordQuestCompleter
 				PerformSearch(SearchBox.Text.Trim());
 			}
 
+			CreateSelectedGame();
+		}
+
+		private void CreateSelectedGame()
+		{
 			string path = DoCreateGame();
 			if (path != null)
 			{
@@ -989,6 +1034,24 @@ namespace DiscordQuestCompleter
 		private void GeneratedGamesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
 		{
 			UpdateActionButtonsState();
+		}
+
+		private void GeneratedGamesList_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+		{
+			var item = ItemsControl.ContainerFromElement(GeneratedGamesList, e.OriginalSource as DependencyObject) as ListBoxItem;
+			if (item != null)
+			{
+				item.IsSelected = true;
+
+				var contextMenu = new ContextMenu();
+				var openLocationItem = new MenuItem { Header = "Open the exe location" };
+				openLocationItem.Click += OpenGameLocation_Click;
+				var editGameItem = new MenuItem { Header = "Edit name or path" };
+				editGameItem.Click += EditGame_Click;
+				contextMenu.Items.Add(openLocationItem);
+				contextMenu.Items.Add(editGameItem);
+				item.ContextMenu = contextMenu;
+			}
 		}
 
 		private void GeneratedGamesList_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -1195,6 +1258,21 @@ namespace DiscordQuestCompleter
 						UpdateStatus("Failed to apply edits.", StatusLevel.Error);
 						MessageBox.Show(ex.Message, "Edit Error");
 					}
+				}
+			}
+		}
+
+		private void OpenGameLocation_Click(object sender, RoutedEventArgs e)
+		{
+			if (GeneratedGamesList.SelectedItem is GeneratedGame game)
+			{
+				try
+				{
+					Process.Start("explorer.exe", "/select,\"" + game.FullPath + "\"");
+				}
+				catch (Exception ex)
+				{
+					UpdateStatus("Error opening game location: " + ex.Message, StatusLevel.Error);
 				}
 			}
 		}

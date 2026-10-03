@@ -198,7 +198,8 @@
 
 				<ListBox x:Name="GeneratedGamesList" Grid.Row="1" Background="Transparent" BorderThickness="0" 
                          ItemContainerStyle="{StaticResource GeneratedGameItemStyle}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                         SelectionChanged="GeneratedGamesList_SelectionChanged" MouseDoubleClick="GeneratedGamesList_MouseDoubleClick">
+						  SelectionChanged="GeneratedGamesList_SelectionChanged" MouseDoubleClick="GeneratedGamesList_MouseDoubleClick"
+						 PreviewMouseRightButtonDown="GeneratedGamesList_PreviewMouseRightButtonDown">
 					<ListBox.ItemsPanel>
 						<ItemsPanelTemplate>
 							<WrapPanel Orientation="Horizontal" />
@@ -243,16 +244,12 @@
 				<Grid Grid.Row="2" Margin="0,15,0,0">
 					<Grid x:Name="NotRunningButtons" Visibility="Visible">
 						<Grid.ColumnDefinitions>
-							<!-- Run button gets 3 parts of space -->
 							<ColumnDefinition Width="3*"/>
-							<!-- Edit & Delete each get 1 part -->
-							<ColumnDefinition Width="*"/>
 							<ColumnDefinition Width="*"/>
 						</Grid.ColumnDefinitions>
 
 						<Button Grid.Column="0" Content="Run" Margin="0,0,5,0" Background="#2d90fa" Click="RunGame_Click"/>
-						<Button Grid.Column="1" Content="✏️" Margin="5,0,5,0" Background="#ffc107" Foreground="Black" Click="EditGame_Click" ToolTip="Edit Name or Path"/>
-						<Button Grid.Column="2" Content="🗑️" Margin="5,0,0,0" Background="#ed4245" Click="DeleteGame_Click" ToolTip="Delete the dummy game"/>
+						<Button Grid.Column="1" Content="🗑️" Margin="5,0,0,0" Background="#ed4245" Click="DeleteGame_Click" ToolTip="Delete the dummy game"/>
 					</Grid>
 
 					<Button x:Name="StopButton" Content="Stop" Background="#ed4245" Visibility="Collapsed" Click="StopGame_Click"/>
