@@ -718,7 +718,7 @@ namespace DiscordQuestCompleter
 		private void PerformSearch(string query)
 		{
 			// Removed the < 3 character restriction
-			if (string.IsNullOrEmpty(query))
+			if (_isSearchPlaceholder || string.IsNullOrWhiteSpace(query))
 			{
 				GamesList.ItemsSource = null;
 				PathsList.ItemsSource = null;
