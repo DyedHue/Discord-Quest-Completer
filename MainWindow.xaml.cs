@@ -569,7 +569,7 @@ namespace DiscordQuestCompleter
 				// If we don't have a loaded DB and local file doesn't exist, prompt user to fetch
 				if ((_discordCache == null || _discordCache.Count == 0) && !File.Exists(_localDbPath))
 				{
-					var result = MessageBox.Show("Search database not found. Do you want to fetch? (~11MB download)", "Search DB Missing", MessageBoxButton.YesNo);
+					var result = MessageBox.Show("Search database not found. Do you want to fetch? (~12 MB download)", "Search DB Missing", MessageBoxButton.YesNo);
 					if (result == MessageBoxResult.Yes)
 					{
 						_ = FetchDiscordDataAsync_Internal(true);

@@ -137,7 +137,7 @@
 								 TextChanged="SearchBox_TextChanged"/>
 
 						<Button x:Name="RefetchButton" Grid.Column="1" Margin="8,0,0,0" Width="36" Height="32" Click="RefetchButton_Click"
-								ToolTip="Refetch search database (~11MB download)">
+								ToolTip="Refetch search database (~12 MB download)">
 							<TextBlock Text="⟳" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
 						</Button>
 					</Grid>
@@ -285,7 +285,7 @@
 					</StackPanel>
 				</StackPanel>
 				<StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,0,0">
-					<Button Content="📁" Background="#3f4147" ToolTip="Show the app's folder" Padding="8,4" Margin="0,0,0,4" Click="OpenAppFolder_Click"/>
+					<Button Content="📁" Background="#3f4147" ToolTip="Open the app's folder" Padding="8,4" Margin="0,0,0,4" Click="OpenAppFolder_Click"/>
 					<Button Background="#3f4147" Padding="4,4" Click="OpenGitHubReleases_Click" ToolTip="Go to the repository on Github">
 						<Image Source="/GitHub_Invertocat_White.png" Width="16" Height="16"/>
 					</Button>
