@@ -27,6 +27,7 @@ namespace DiscordQuestCompleter
 		public string Icon { get; set; } = "";
 		public string IconUrl { get; set; } = "";
 		public bool IsSteamGame { get; set; }
+		public bool IsSectionHeader { get; set; }
 		public bool HasIcon => !string.IsNullOrEmpty(IconUrl);
 
 		private bool _isRunning;
@@ -1363,6 +1364,7 @@ string steamDirectory = SettingsWindow.NormalizeSteamDirectory(_settings.SteamDi
 					string steamCommonDirectory = Path.Combine(steamDirectory, "steamapps", "common");
 					if (Directory.Exists(steamCommonDirectory))
 					{
+						var steamGames = new List<GeneratedGame>();
 						foreach (string steamExe in Directory.EnumerateFiles(steamCommonDirectory, "*.exe", SearchOption.AllDirectories))
 						{
 							try
@@ -1391,7 +1393,7 @@ string steamDirectory = SettingsWindow.NormalizeSteamDirectory(_settings.SteamDi
 									IconUrl = !string.IsNullOrWhiteSpace(gameId) && !string.IsNullOrWhiteSpace(gameIcon) ? $"https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/{gameId}/{gameIcon}.jpg" : "",
 									IsSteamGame = true
 								};
-								GeneratedGamesList.Items.Add(game);
+								steamGames.Add(game);
 								string fileFull;
 								try { fileFull = Path.GetFullPath(steamExe); } catch { fileFull = steamExe; }
 								if (normalizedOldSelectedPath != null && fileFull.Equals(normalizedOldSelectedPath, StringComparison.OrdinalIgnoreCase))
@@ -1400,6 +1402,14 @@ string steamDirectory = SettingsWindow.NormalizeSteamDirectory(_settings.SteamDi
 								}
 							}
 							catch { }
+						}
+						if (steamGames.Count > 0)
+						{
+							GeneratedGamesList.Items.Add(new GeneratedGame { DisplayName = "Steam Games", IsSectionHeader = true });
+							foreach (var game in steamGames)
+							{
+								GeneratedGamesList.Items.Add(game);
+							}
 						}
 					}
 				}
@@ -1415,10 +1425,11 @@ string steamDirectory = SettingsWindow.NormalizeSteamDirectory(_settings.SteamDi
 			else
 			{
 				// If nothing was selected, default to the first game when available.
-				if (GeneratedGamesList.Items.Count > 0)
+				var firstGame = GeneratedGamesList.Items.OfType<GeneratedGame>().FirstOrDefault(game => !game.IsSectionHeader);
+				if (firstGame != null)
 				{
-					GeneratedGamesList.SelectedIndex = 0;
-					GeneratedGamesList.ScrollIntoView(GeneratedGamesList.SelectedItem);
+					GeneratedGamesList.SelectedItem = firstGame;
+					GeneratedGamesList.ScrollIntoView(firstGame);
 				}
 			}
 		}
