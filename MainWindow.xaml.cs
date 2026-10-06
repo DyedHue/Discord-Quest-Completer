@@ -70,7 +70,7 @@ namespace DiscordQuestCompleter
 
 	public partial class MainWindow : Window
 	{
-		private const string CurrentVersion = "v4.2.0";
+		private const string CurrentVersion = "v4.3.0";
 
 		// P/Invoke for minimizing windows
 		[DllImport("user32.dll")]
