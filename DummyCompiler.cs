@@ -79,38 +79,38 @@ class DummyGame : Form
             if (lines.Length > 1) targetRelPath = lines[1].Trim();
         }
 
+        string displayPath = targetRelPath;
         string settingsPath = """";
-        if (!string.IsNullOrEmpty(targetRelPath) && !Path.IsPathRooted(targetRelPath))
+        DirectoryInfo currentDir = new DirectoryInfo(Path.GetDirectoryName(exePath));
+        DirectoryInfo gameFoldersDir = null;
+        while (currentDir != null)
         {
-            string exeDir = Path.GetDirectoryName(exePath);
-            string targetDir = Path.GetDirectoryName(targetRelPath);
-            DirectoryInfo currentDir = new DirectoryInfo(exeDir);
-            
-            if (!string.IsNullOrEmpty(targetDir))
+            if (string.Equals(currentDir.Name, ""DQC Game Folders"", StringComparison.OrdinalIgnoreCase))
             {
-                string[] segments = targetDir.Split(new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
-                for (int i = 0; i < segments.Length; i++)
-                {
-                    if (currentDir.Parent != null)
-                        currentDir = currentDir.Parent;
-                }
+                gameFoldersDir = currentDir;
+                break;
             }
-            
-            if (currentDir.Parent != null)
-            {
-                currentDir = currentDir.Parent;
-                settingsPath = Path.Combine(currentDir.FullName, ""settings.json"");
-            }
+            currentDir = currentDir.Parent;
         }
 
-        this.Text = string.IsNullOrEmpty(gameName) ? targetRelPath : gameName;
+        if (gameFoldersDir != null)
+        {
+            if (gameFoldersDir.Parent != null)
+                settingsPath = Path.Combine(gameFoldersDir.Parent.FullName, ""settings.json"");
+        }
+        else
+        {
+            displayPath = exePath;
+        }
+
+        this.Text = string.IsNullOrEmpty(gameName) ? displayPath : gameName;
         this.Width = 600;
         this.Height = 200;
         this.StartPosition = FormStartPosition.CenterScreen;
 
         bool startMinimized = false;
 
-        if (File.Exists(settingsPath))
+        if (!string.IsNullOrEmpty(settingsPath) && File.Exists(settingsPath))
         {
             try
             {
@@ -145,7 +145,7 @@ class DummyGame : Form
         lbl.BorderStyle = BorderStyle.None;
         lbl.BackColor = this.BackColor;
 
-        string labelText = ""Target Path: "" + targetRelPath + ""\n\nDummy game process is running.\n"";
+        string labelText = ""Target Path: "" + displayPath + ""\n\nDummy game process is running.\n"";
         labelText += ""Keep this window open to progress the quest.\n"";
 
         DateTime startTime = DateTime.Now;
@@ -282,8 +282,15 @@ class DummyGame : Form
 		/// path on line 2. Compiles game_template.exe first if it doesn't exist yet.
 		/// </summary>
 		public static bool CreateGameExe(string defaultExePath, string exePath, string gameName, string targetRelPath, string id, string icon, out string error)
+        {
+            return CreateGameExe(defaultExePath, exePath, gameName, targetRelPath, id, icon, true, out error);
+        }
+
+        public static bool CreateGameExe(string defaultExePath, string exePath, string gameName, string targetRelPath, string id, string icon, bool overwrite, out string error)
 		{
 			error = "";
+            bool exeCreated = false;
+            bool metadataCreated = false;
 
 			// Ensure the generic default exe exists (compiles once if missing)
 			if (!EnsureDefaultExe(defaultExePath, out error))
@@ -293,21 +300,57 @@ class DummyGame : Form
 			{
 				string targetDir = Path.GetDirectoryName(exePath) ?? Environment.CurrentDirectory;
 				Directory.CreateDirectory(targetDir);
+                string txtPath = Path.ChangeExtension(exePath, ".txt");
+
+                if (!overwrite && File.Exists(txtPath))
+                {
+                    error = "The game metadata file already exists and will not be overwritten: " + txtPath;
+                    return false;
+                }
 
 				// Copy the generic exe to the desired location
-				File.Copy(defaultExePath, exePath, overwrite: true);
+                File.Copy(defaultExePath, exePath, overwrite);
+                exeCreated = !overwrite;
 
 				// Write the metadata txt file: line 1 = name, line 2 = relative path, line 3 = id, line 4 = icon
-				string txtPath = Path.ChangeExtension(exePath, ".txt");
-				File.WriteAllLines(txtPath, new[] { gameName ?? "", targetRelPath ?? "", id ?? "", icon ?? "" });
+                if (overwrite)
+                {
+                    File.WriteAllLines(txtPath, new[] { gameName ?? "", targetRelPath ?? "", id ?? "", icon ?? "" });
+                }
+                else
+                {
+                    using (var metadataStream = new FileStream(txtPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                    using (var writer = new StreamWriter(metadataStream))
+                    {
+                        metadataCreated = true;
+                        writer.WriteLine(gameName ?? "");
+                        writer.WriteLine(targetRelPath ?? "");
+                        writer.WriteLine(id ?? "");
+                        writer.WriteLine(icon ?? "");
+                    }
+                }
 
 				return true;
 			}
 			catch (Exception ex)
 			{
+                if (!overwrite)
+                {
+                    if (metadataCreated) TryDeleteCreatedFile(Path.ChangeExtension(exePath, ".txt"));
+                    if (exeCreated) TryDeleteCreatedFile(exePath);
+                }
 				error = ex.Message;
 				return false;
 			}
 		}
+
+        private static void TryDeleteCreatedFile(string path)
+        {
+            try
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch { }
+        }
 	}
 }

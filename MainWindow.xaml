@@ -260,7 +260,25 @@
 					<TextBox x:Name="ManualName" Margin="0,0,0,15"/>
 
 					<TextBlock Text="EXE Path (Required):" Margin="0,0,0,5" FontWeight="Bold"/>
-					<TextBox x:Name="ManualPath" Margin="0,0,0,20"/>
+					<TextBox x:Name="ManualPath" Margin="0,0,0,12"/>
+
+					<CheckBox x:Name="RequiresManifestCheckBox" Content="Requires manifest (.acf) file?" Checked="RequiresManifestCheckBox_Changed" Unchecked="RequiresManifestCheckBox_Changed" Margin="0,0,0,4"/>
+					<TextBlock x:Name="SteamManifestNotice" Text="The settings at the bottom won't work for games created this way" Foreground="#949ba4" TextWrapping="Wrap" Margin="24,0,0,8" Visibility="Collapsed"/>
+					<StackPanel x:Name="ManifestFieldsPanel" Visibility="Collapsed" Margin="0,0,0,12">
+						<TextBlock Text="Your steam directory:" Margin="0,0,0,5" FontWeight="Bold"/>
+						<Grid Margin="0,0,0,10">
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*"/>
+								<ColumnDefinition Width="Auto"/>
+							</Grid.ColumnDefinitions>
+							<TextBox x:Name="ManualSteamDirectoryTextBox" Grid.Column="0" IsReadOnly="True"/>
+							<Button Grid.Column="1" Margin="8,0,0,0" Width="38" Height="34" Padding="0" Background="#3f4147" ToolTip="Open Settings" Click="ManualSettingsButton_Click">
+								<TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+							</Button>
+						</Grid>
+						<TextBlock Text="Manifest file content:" Margin="0,0,0,5" FontWeight="Bold"/>
+						<TextBox x:Name="ManifestContentTextBox" Height="150" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
+					</StackPanel>
 
 					<Button Content="Create Dummy Game" Background="#3ba55c" Click="CreateGame_Click" Padding="10,12"/>
 				</StackPanel>

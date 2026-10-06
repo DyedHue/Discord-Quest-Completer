@@ -175,6 +175,10 @@ namespace DiscordQuestCompleter
 					SendNotificationCheckBox.Checked += Setting_Changed;
 					SendNotificationCheckBox.Unchecked += Setting_Changed;
 				}
+				if (ManualSteamDirectoryTextBox != null)
+				{
+					ManualSteamDirectoryTextBox.Text = _settings.SteamDirectory ?? "";
+				}
 			}
 			catch { }
 		}
@@ -231,9 +235,22 @@ namespace DiscordQuestCompleter
 			settingsWindow.SteamDirectoryChanged += steamDirectory =>
 			{
 				_settings.SteamDirectory = steamDirectory;
+				ManualSteamDirectoryTextBox.Text = steamDirectory;
 				SaveSettings();
 			};
 			settingsWindow.ShowDialog();
+		}
+
+		private void ManualSettingsButton_Click(object sender, RoutedEventArgs e)
+		{
+			SettingsButton_Click(sender, e);
+		}
+
+		private void RequiresManifestCheckBox_Changed(object sender, RoutedEventArgs e)
+		{
+			Visibility visibility = RequiresManifestCheckBox.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+			SteamManifestNotice.Visibility = visibility;
+			ManifestFieldsPanel.Visibility = visibility;
 		}
 
 		private void MainWindow_Closing(object sender, CancelEventArgs e)
@@ -441,6 +458,11 @@ namespace DiscordQuestCompleter
 			{
 				if (Tabs.SelectedIndex != 0)
 				{
+					if (ManifestContentTextBox.IsKeyboardFocusWithin)
+					{
+						return;
+					}
+
 					Tabs.Focus();
 					e.Handled = true;
 					return;
@@ -493,7 +515,7 @@ namespace DiscordQuestCompleter
 			}
 		}
 
-		private (bool IsValid, string Message) IsValidPath(string pathStr)
+		private (bool IsValid, string Message) IsValidPath(string pathStr, string baseDirectory = null)
 		{
 			pathStr = pathStr.Trim();
 			if (string.IsNullOrEmpty(pathStr)) return (false, "Path cannot be empty.");
@@ -503,7 +525,7 @@ namespace DiscordQuestCompleter
 
 			try
 			{
-				string baseFull = Path.GetFullPath(_baseDir);
+				string baseFull = Path.GetFullPath(baseDirectory ?? _baseDir);
 				if (!baseFull.EndsWith(Path.DirectorySeparatorChar.ToString()))
 				{
 					baseFull += Path.DirectorySeparatorChar;
@@ -511,7 +533,7 @@ namespace DiscordQuestCompleter
 				string resolvedPath = Path.GetFullPath(Path.Combine(baseFull, pathStr));
 				if (!resolvedPath.StartsWith(baseFull, StringComparison.OrdinalIgnoreCase))
 				{
-					return (false, "Path must reside inside the game folders directory.");
+					return (false, baseDirectory == null ? "Path must reside inside the game folders directory." : "Path must reside inside the selected Steam common directory.");
 				}
 			}
 			catch (Exception ex)
@@ -890,6 +912,12 @@ namespace DiscordQuestCompleter
 
 		private void CreateSelectedGame()
 		{
+			if (Tabs.SelectedIndex == 1 && RequiresManifestCheckBox.IsChecked == true)
+			{
+				CreateManifestGame();
+				return;
+			}
+
 			string path = DoCreateGame();
 			if (path != null)
 			{
@@ -986,6 +1014,161 @@ namespace DiscordQuestCompleter
 				MessageBox.Show(error, "Creation Error");
 				return null;
 			}
+		}
+
+		private void CreateManifestGame()
+		{
+			string gameName = ManualName.Text.Trim();
+			string targetPath = ManualPath.Text.Trim();
+			if (string.IsNullOrEmpty(targetPath))
+			{
+				MessageBox.Show("EXE Path is required.", "Missing Input");
+				return;
+			}
+
+			if (!targetPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+				targetPath += ".exe";
+
+			string manifestContent = ManifestContentTextBox.Text;
+			MatchCollection appIds = Regex.Matches(manifestContent, @"(?im)^[ \t]*""appid""[ \t]+""(?<appid>\d+)""[ \t]*$");
+			if (appIds.Count != 1 || !uint.TryParse(appIds[0].Groups["appid"].Value, out _))
+			{
+				MessageBox.Show("Manifest content must contain exactly one numeric appid field.", "Invalid Manifest");
+				return;
+			}
+
+			string steamDirectory = _settings.SteamDirectory?.Trim();
+			if (string.IsNullOrWhiteSpace(steamDirectory))
+			{
+				MessageBox.Show("Set your Steam directory in Settings before creating a manifest-based game.", "Missing Steam Directory");
+				return;
+			}
+
+			string steamAppsDirectory;
+			string commonDirectory;
+			try
+			{
+				steamDirectory = Path.GetFullPath(steamDirectory.Replace('/', '\\'));
+				if (!Directory.Exists(steamDirectory))
+				{
+					MessageBox.Show("The configured Steam directory does not exist.", "Invalid Steam Directory");
+					return;
+				}
+				steamAppsDirectory = Path.Combine(steamDirectory, "steamapps");
+				commonDirectory = Path.Combine(steamAppsDirectory, "common");
+			}
+			catch (Exception ex)
+			{
+				MessageBox.Show("The configured Steam directory is invalid:\n" + ex.Message, "Invalid Steam Directory");
+				return;
+			}
+
+			var valid = IsValidPath(targetPath, commonDirectory);
+			if (!valid.IsValid)
+			{
+				MessageBox.Show($"The path provided is invalid:\n{valid.Message}", "Invalid Path");
+				return;
+			}
+
+			string fullExePath = Path.GetFullPath(Path.Combine(commonDirectory, targetPath));
+			string metadataPath = Path.ChangeExtension(fullExePath, ".txt");
+			string manifestPath = Path.Combine(steamAppsDirectory, "appmanifest_" + appIds[0].Groups["appid"].Value + ".acf");
+
+			try
+			{
+				string existingExe = Directory.Exists(commonDirectory) ? FindExistingSteamExe(commonDirectory, Path.GetFileName(fullExePath)) : null;
+				if (existingExe != null)
+				{
+					MessageBox.Show("An executable with the same name already exists in the Steam common directory:\n" + existingExe, "Executable Already Exists");
+					return;
+				}
+			}
+			catch (Exception ex)
+			{
+				MessageBox.Show("Could not safely check the Steam common directory for an existing executable:\n" + ex.Message, "Directory Check Failed");
+				return;
+			}
+
+			if (File.Exists(manifestPath))
+			{
+				MessageBox.Show("The manifest file already exists and will not be overwritten:\n" + manifestPath, "Manifest Already Exists");
+				return;
+			}
+			if (File.Exists(metadataPath))
+			{
+				MessageBox.Show("The game metadata file already exists and will not be overwritten:\n" + metadataPath, "Metadata Already Exists");
+				return;
+			}
+
+			bool manifestCreated = false;
+			try
+			{
+				Directory.CreateDirectory(steamAppsDirectory);
+				Directory.CreateDirectory(commonDirectory);
+				using (var manifestStream = new FileStream(manifestPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+				using (var writer = new StreamWriter(manifestStream))
+				{
+					manifestCreated = true;
+					writer.Write(manifestContent);
+				}
+
+				bool defaultExistedBefore = File.Exists(_defaultExePath);
+				UpdateStatus(defaultExistedBefore ? "Creating Steam game..." : "Compiling base executable (one-time)...", StatusLevel.Neutral);
+				if (!DummyCompiler.CreateGameExe(_defaultExePath, fullExePath, gameName, targetPath, "", "", false, out string error))
+				{
+					TryDeleteFile(manifestPath);
+					UpdateStatus("Error creating Steam game executable.", StatusLevel.Error);
+					MessageBox.Show(error, "Creation Error");
+					return;
+				}
+
+				UpdateStatus("Successfully created Steam game: " + Path.GetFileName(fullExePath), StatusLevel.Success);
+			}
+			catch (Exception ex)
+			{
+				if (manifestCreated)
+				{
+					TryDeleteFile(manifestPath);
+				}
+				UpdateStatus("Error creating Steam manifest game.", StatusLevel.Error);
+				MessageBox.Show(ex.Message, "Creation Error");
+			}
+		}
+
+		private string FindExistingSteamExe(string commonDirectory, string exeFileName)
+		{
+			var pendingDirectories = new Stack<string>();
+			pendingDirectories.Push(commonDirectory);
+			while (pendingDirectories.Count > 0)
+			{
+				string currentDirectory = pendingDirectories.Pop();
+				foreach (string file in Directory.EnumerateFiles(currentDirectory))
+				{
+					if (Path.GetFileName(file).Equals(exeFileName, StringComparison.OrdinalIgnoreCase))
+					{
+						return file;
+					}
+				}
+
+				foreach (string directory in Directory.EnumerateDirectories(currentDirectory))
+				{
+					if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) == 0)
+					{
+						pendingDirectories.Push(directory);
+					}
+				}
+			}
+
+			return null;
+		}
+
+		private void TryDeleteFile(string path)
+		{
+			try
+			{
+				if (File.Exists(path)) File.Delete(path);
+			}
+			catch { }
 		}
 
 		private void LoadGames(string forceSelectPath = null)
