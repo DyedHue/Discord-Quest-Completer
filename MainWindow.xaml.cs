@@ -1030,7 +1030,7 @@ namespace DiscordQuestCompleter
 				targetPath += ".exe";
 
 			string manifestContent = ManifestContentTextBox.Text;
-			MatchCollection appIds = Regex.Matches(manifestContent, @"(?im)^[ \t]*""appid""[ \t]+""(?<appid>\d+)""[ \t]*$");
+			MatchCollection appIds = Regex.Matches(manifestContent.Replace("\r\n", "\n").Replace("\r", "\n"), @"(?im)^[ \t]*""appid""[ \t]+""(?<appid>\d+)""[ \t]*$");
 			if (appIds.Count != 1 || !uint.TryParse(appIds[0].Groups["appid"].Value, out _))
 			{
 				MessageBox.Show("Manifest content must contain exactly one numeric appid field.", "Invalid Manifest");
