@@ -123,7 +123,13 @@ namespace DiscordQuestCompleter
 				}
 			}
 			catch { }
-
+		
+			string previousSteamDirectory = _settings.SteamDirectory ?? "";
+			_settings.SteamDirectory = SettingsWindow.NormalizeSteamDirectory(previousSteamDirectory);
+			if (!string.Equals(previousSteamDirectory, _settings.SteamDirectory, StringComparison.Ordinal))
+			{
+				SaveSettings();
+			}
 			// Set checkbox states without triggering the Setting_Changed handler to avoid
 			// intermediate writes that could persist partial state when the user
 			// toggles both options quickly.
@@ -234,8 +240,9 @@ namespace DiscordQuestCompleter
 			};
 			settingsWindow.SteamDirectoryChanged += steamDirectory =>
 			{
-				_settings.SteamDirectory = steamDirectory;
-				ManualSteamDirectoryTextBox.Text = steamDirectory;
+				_settings.SteamDirectory = SettingsWindow.NormalizeSteamDirectory(steamDirectory);
+				ManualSteamDirectoryTextBox.Text = SettingsWindow.NormalizeSteamDirectory(steamDirectory);
+				UpdateManifestPreviews();
 				SaveSettings();
 			};
 			settingsWindow.ShowDialog();
@@ -251,6 +258,79 @@ namespace DiscordQuestCompleter
 			Visibility visibility = RequiresManifestCheckBox.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
 			SteamManifestNotice.Visibility = visibility;
 			ManifestFieldsPanel.Visibility = visibility;
+			ManifestPreviewPanel.Visibility = visibility;
+			UpdateManifestPreviews();
+		}
+
+		private void ManualPath_TextChanged(object sender, TextChangedEventArgs e)
+		{
+			UpdateManifestPreviews();
+		}
+
+		private void ManifestContentTextBox_TextChanged(object sender, TextChangedEventArgs e)
+		{
+			UpdateManifestPreviews();
+		}
+
+		private void UpdateManifestPreviews()
+		{
+			string steamDirectory = SettingsWindow.NormalizeSteamDirectory(_settings.SteamDirectory);
+			if (string.IsNullOrEmpty(steamDirectory))
+			{
+				steamDirectory = "[steam directory]";
+			}
+			else
+			{
+				steamDirectory = steamDirectory.Replace("/", "\\").TrimEnd(Path.DirectorySeparatorChar);
+				if (steamDirectory.Length == 2 && steamDirectory[1] == Convert.ToChar(58))
+				{
+					steamDirectory += Path.DirectorySeparatorChar;
+				}
+			}
+			string separator = steamDirectory.EndsWith(Path.DirectorySeparatorChar.ToString()) ? "" : Path.DirectorySeparatorChar.ToString();
+			string appId = TryExtractManifestAppId(ManifestContentTextBox.Text, out string parsedAppId) ? parsedAppId : "<appid>";
+			string exePath = ManualPath.Text.Trim();
+			if (string.IsNullOrEmpty(exePath))
+			{
+				exePath = "[exe path]";
+			}
+			else
+			{
+				exePath = exePath.Replace("/", "\\");
+				if (!exePath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+				{
+					exePath += ".exe";
+				}
+			}
+			ManifestFilePreviewText.Inlines.Clear();
+			AddManifestPreviewRun(ManifestFilePreviewText, "1. Will create ");
+			AddManifestPreviewRun(ManifestFilePreviewText, steamDirectory, true);
+			AddManifestPreviewRun(ManifestFilePreviewText, separator + "steamapps\\appmanifest_");
+			AddManifestPreviewRun(ManifestFilePreviewText, appId, true);
+			AddManifestPreviewRun(ManifestFilePreviewText, ".acf with the provided content");
+			ManifestExePreviewText.Inlines.Clear();
+			AddManifestPreviewRun(ManifestExePreviewText, "2. Will create ");
+			AddManifestPreviewRun(ManifestExePreviewText, steamDirectory, true);
+			AddManifestPreviewRun(ManifestExePreviewText, separator + "steamapps\\common\\");
+			AddManifestPreviewRun(ManifestExePreviewText, exePath, true);
+		}
+
+		private static void AddManifestPreviewRun(System.Windows.Controls.TextBlock textBlock, string text, bool highlight = false)
+		{
+			var run = new System.Windows.Documents.Run(text);
+			if (highlight)
+			{
+				run.Foreground = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#6b86b0"));
+			}
+			textBlock.Inlines.Add(run);
+		}
+
+		private static bool TryExtractManifestAppId(string manifestContent, out string appId)
+		{
+			string normalizedContent = (manifestContent ?? "").Replace("\r\n", "\n").Replace("\r", "\n");
+			MatchCollection appIds = Regex.Matches(normalizedContent, @"(?im)^[ \t]*""appid""[ \t]+""(?<appid>\d+)""[ \t]*$");
+			appId = appIds.Count == 1 ? appIds[0].Groups["appid"].Value : null;
+			return appIds.Count == 1 && uint.TryParse(appId, out _);
 		}
 
 		private void MainWindow_Closing(object sender, CancelEventArgs e)
@@ -1037,7 +1117,7 @@ namespace DiscordQuestCompleter
 				return;
 			}
 
-			string steamDirectory = _settings.SteamDirectory?.Trim();
+			string steamDirectory = SettingsWindow.NormalizeSteamDirectory(_settings.SteamDirectory);
 			if (string.IsNullOrWhiteSpace(steamDirectory))
 			{
 				MessageBox.Show("Set your Steam directory in Settings before creating a manifest-based game.", "Missing Steam Directory");

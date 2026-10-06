@@ -260,7 +260,7 @@
 					<TextBox x:Name="ManualName" Margin="0,0,0,15"/>
 
 					<TextBlock Text="EXE Path (Required):" Margin="0,0,0,5" FontWeight="Bold"/>
-					<TextBox x:Name="ManualPath" Margin="0,0,0,12"/>
+					<TextBox x:Name="ManualPath" Margin="0,0,0,12" TextChanged="ManualPath_TextChanged"/>
 
 					<CheckBox x:Name="RequiresManifestCheckBox" Content="Requires manifest (.acf) file?" Checked="RequiresManifestCheckBox_Changed" Unchecked="RequiresManifestCheckBox_Changed" Margin="0,0,0,4"/>
 					<TextBlock x:Name="SteamManifestNotice" Text="The settings at the bottom won't work for games created this way" Foreground="#949ba4" TextWrapping="Wrap" Margin="24,0,0,8" Visibility="Collapsed"/>
@@ -277,7 +277,11 @@
 							</Button>
 						</Grid>
 						<TextBlock Text="Manifest file content:" Margin="0,0,0,5" FontWeight="Bold"/>
-						<TextBox x:Name="ManifestContentTextBox" Height="150" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
+						<TextBox x:Name="ManifestContentTextBox" Height="150" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" TextChanged="ManifestContentTextBox_TextChanged"/>
+					</StackPanel>
+					<StackPanel x:Name="ManifestPreviewPanel" Visibility="Collapsed" Margin="0,0,0,10">
+						<TextBlock x:Name="ManifestFilePreviewText" Foreground="#949ba4" TextWrapping="Wrap"/>
+						<TextBlock x:Name="ManifestExePreviewText" Foreground="#949ba4" TextWrapping="Wrap" Margin="0,3,0,0"/>
 					</StackPanel>
 
 					<Button Content="Create Dummy Game" Background="#3ba55c" Click="CreateGame_Click" Padding="10,12"/>
