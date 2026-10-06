@@ -286,7 +286,7 @@ class DummyGame : Form
             return CreateGameExe(defaultExePath, exePath, gameName, targetRelPath, id, icon, true, out error);
         }
 
-        public static bool CreateGameExe(string defaultExePath, string exePath, string gameName, string targetRelPath, string id, string icon, bool overwrite, out string error)
+        public static bool CreateGameExe(string defaultExePath, string exePath, string gameName, string targetRelPath, string id, string icon, bool overwrite, out string error, string sourceMarker = null)
 		{
 			error = "";
             bool exeCreated = false;
@@ -312,25 +312,30 @@ class DummyGame : Form
                 File.Copy(defaultExePath, exePath, overwrite);
                 exeCreated = !overwrite;
 
-				// Write the metadata txt file: line 1 = name, line 2 = relative path, line 3 = id, line 4 = icon
-                if (overwrite)
-                {
-                    File.WriteAllLines(txtPath, new[] { gameName ?? "", targetRelPath ?? "", id ?? "", icon ?? "" });
-                }
-                else
-                {
-                    using (var metadataStream = new FileStream(txtPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                    using (var writer = new StreamWriter(metadataStream))
-                    {
-                        metadataCreated = true;
-                        writer.WriteLine(gameName ?? "");
-                        writer.WriteLine(targetRelPath ?? "");
-                        writer.WriteLine(id ?? "");
-                        writer.WriteLine(icon ?? "");
-                    }
-                }
-
-				return true;
+											string[] metadataLines = new[] { gameName ?? "", targetRelPath ?? "", id ?? "", icon ?? "" };
+			if (!string.IsNullOrEmpty(sourceMarker))
+			{
+				Array.Resize(ref metadataLines, metadataLines.Length + 1);
+				metadataLines[metadataLines.Length - 1] = sourceMarker;
+			}
+			if (overwrite)
+			{
+				File.WriteAllLines(txtPath, metadataLines);
+			}
+			else
+			{
+				using (var metadataStream = new FileStream(txtPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+				using (var writer = new StreamWriter(metadataStream))
+				{
+					metadataCreated = true;
+					foreach (string line in metadataLines)
+					{
+						writer.WriteLine(line);
+					}
+				}
+			}
+			
+							return true;
 			}
 			catch (Exception ex)
 			{

@@ -26,6 +26,7 @@ namespace DiscordQuestCompleter
 		public string Id { get; set; } = "";
 		public string Icon { get; set; } = "";
 		public string IconUrl { get; set; } = "";
+		public bool IsSteamGame { get; set; }
 		public bool HasIcon => !string.IsNullOrEmpty(IconUrl);
 
 		private bool _isRunning;
@@ -85,6 +86,12 @@ namespace DiscordQuestCompleter
 		private string _pendingEnterQuery;
 		private bool _isSearchPlaceholder = true;
 		private DispatcherTimer _searchDebounceTimer;
+
+			private sealed class SteamAppMetadata
+			{
+			public string Name { get; set; }
+			public string IconHash { get; set; }
+			}
 
 		public MainWindow()
 		{
@@ -246,6 +253,7 @@ namespace DiscordQuestCompleter
 				SaveSettings();
 			};
 			settingsWindow.ShowDialog();
+			LoadGames();
 		}
 
 		private void ManualSettingsButton_Click(object sender, RoutedEventArgs e)
@@ -460,7 +468,7 @@ namespace DiscordQuestCompleter
 				if (_isDatabaseLoaded)
 				{
 					PerformSearch(enterQuery);
-					CreateSelectedGame();
+					await CreateSelectedGameAsync();
 					if (!string.Equals(currentQuery, enterQuery, StringComparison.Ordinal))
 					{
 						PerformSearch(currentQuery);
@@ -978,7 +986,7 @@ namespace DiscordQuestCompleter
 			}
 		}
 
-		private void CreateGame_Click(object sender, RoutedEventArgs e)
+		private async void CreateGame_Click(object sender, RoutedEventArgs e)
 		{
 			// Force search to apply latest results before creating
 			if (_searchDebounceTimer.IsEnabled)
@@ -987,14 +995,14 @@ namespace DiscordQuestCompleter
 				PerformSearch(SearchBox.Text.Trim());
 			}
 
-			CreateSelectedGame();
+			await CreateSelectedGameAsync();
 		}
 
-		private void CreateSelectedGame()
+		private async Task CreateSelectedGameAsync()
 		{
 			if (Tabs.SelectedIndex == 1 && RequiresManifestCheckBox.IsChecked == true)
 			{
-				CreateManifestGame();
+				await CreateManifestGameAsync();
 				return;
 			}
 
@@ -1096,7 +1104,32 @@ namespace DiscordQuestCompleter
 			}
 		}
 
-		private void CreateManifestGame()
+			private async Task<SteamAppMetadata> FetchSteamAppMetadataAsync(string appId)
+			{
+			using (var client = new HttpClient())
+			{
+			client.Timeout = TimeSpan.FromSeconds(15);
+			client.DefaultRequestHeaders.UserAgent.ParseAdd("DiscordQuestCompleter");
+			string json = await client.GetStringAsync("https://api.steamcmd.net/v1/info/" + Uri.EscapeDataString(appId));
+			var serializer = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+			var response = serializer.DeserializeObject(json) as Dictionary<string, object>;
+			var data = response != null && response.TryGetValue("data", out object dataValue) ? dataValue as Dictionary<string, object> : null;
+			var app = data != null && data.TryGetValue(appId, out object appValue) ? appValue as Dictionary<string, object> : null;
+			var common = app != null && app.TryGetValue("common", out object commonValue) ? commonValue as Dictionary<string, object> : null;
+			if (common == null || !common.TryGetValue("name", out object nameValue) || string.IsNullOrWhiteSpace(nameValue as string))
+			{
+			throw new InvalidDataException("The Steam API response did not include the game name.");
+			}
+			string iconHash = common.TryGetValue("clienticon", out object iconValue) ? iconValue as string : null;
+			if (string.IsNullOrWhiteSpace(iconHash) && common.TryGetValue("icon", out object fallbackIconValue))
+			{
+			iconHash = fallbackIconValue as string;
+			}
+			return new SteamAppMetadata { Name = nameValue as string, IconHash = iconHash ?? "" };
+			}
+			}
+
+		private async Task CreateManifestGameAsync()
 		{
 			string gameName = ManualName.Text.Trim();
 			string targetPath = ManualPath.Text.Trim();
@@ -1117,7 +1150,26 @@ namespace DiscordQuestCompleter
 				return;
 			}
 
-			string steamDirectory = SettingsWindow.NormalizeSteamDirectory(_settings.SteamDirectory);
+						string appId = appIds[0].Groups["appid"].Value;
+			string iconHash = "";
+			if ((FindName("AutoFetchSteamMetadataCheckBox") as CheckBox)?.IsChecked == true)
+			{
+				try
+				{
+					UpdateStatus("Fetching Steam metadata...", StatusLevel.Neutral);
+					SteamAppMetadata metadata = await FetchSteamAppMetadataAsync(appId);
+					gameName = metadata.Name;
+					iconHash = metadata.IconHash;
+				}
+				catch (Exception ex)
+				{
+					UpdateStatus("Failed to fetch Steam metadata.", StatusLevel.Error);
+					MessageBox.Show("Could not fetch Steam name and icon data:\n" + ex.Message + "\n\nTurn off auto-fetch to create without fetched metadata.", "Steam Metadata Error");
+					return;
+				}
+			}
+
+string steamDirectory = SettingsWindow.NormalizeSteamDirectory(_settings.SteamDirectory);
 			if (string.IsNullOrWhiteSpace(steamDirectory))
 			{
 				MessageBox.Show("Set your Steam directory in Settings before creating a manifest-based game.", "Missing Steam Directory");
@@ -1152,7 +1204,7 @@ namespace DiscordQuestCompleter
 
 			string fullExePath = Path.GetFullPath(Path.Combine(commonDirectory, targetPath));
 			string metadataPath = Path.ChangeExtension(fullExePath, ".txt");
-			string manifestPath = Path.Combine(steamAppsDirectory, "appmanifest_" + appIds[0].Groups["appid"].Value + ".acf");
+			string manifestPath = Path.Combine(steamAppsDirectory, "appmanifest_" + appId + ".acf");
 
 			try
 			{
@@ -1194,7 +1246,7 @@ namespace DiscordQuestCompleter
 
 				bool defaultExistedBefore = File.Exists(_defaultExePath);
 				UpdateStatus(defaultExistedBefore ? "Creating Steam game..." : "Compiling base executable (one-time)...", StatusLevel.Neutral);
-				if (!DummyCompiler.CreateGameExe(_defaultExePath, fullExePath, gameName, targetPath, "", "", false, out string error))
+				if (!DummyCompiler.CreateGameExe(_defaultExePath, fullExePath, gameName, targetPath, appId, iconHash, false, out string error, "steam"))
 				{
 					TryDeleteFile(manifestPath);
 					UpdateStatus("Error creating Steam game executable.", StatusLevel.Error);
@@ -1203,6 +1255,7 @@ namespace DiscordQuestCompleter
 				}
 
 				UpdateStatus("Successfully created Steam game: " + Path.GetFileName(fullExePath), StatusLevel.Success);
+				LoadGames(fullExePath);
 			}
 			catch (Exception ex)
 			{
@@ -1302,6 +1355,57 @@ namespace DiscordQuestCompleter
 				}
 			}
 
+			string steamDirectory = SettingsWindow.NormalizeSteamDirectory(_settings.SteamDirectory);
+			if (!string.IsNullOrWhiteSpace(steamDirectory))
+			{
+				try
+				{
+					string steamCommonDirectory = Path.Combine(steamDirectory, "steamapps", "common");
+					if (Directory.Exists(steamCommonDirectory))
+					{
+						foreach (string steamExe in Directory.EnumerateFiles(steamCommonDirectory, "*.exe", SearchOption.AllDirectories))
+						{
+							try
+							{
+								string txtPath = Path.ChangeExtension(steamExe, ".txt");
+								if (!File.Exists(txtPath))
+								{
+									continue;
+								}
+								string[] lines = File.ReadAllLines(txtPath);
+								if (lines.Length < 5 || !lines[4].Trim().Equals("steam", StringComparison.OrdinalIgnoreCase))
+								{
+									continue;
+								}
+								string gameName = lines[0].Trim();
+								string gameId = lines[2].Trim();
+								string gameIcon = lines[3].Trim();
+								string relativePath = steamExe.Substring(steamCommonDirectory.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Replace("\\", "/");
+								var game = new GeneratedGame
+								{
+									FullPath = steamExe,
+									RelativePath = relativePath,
+									DisplayName = string.IsNullOrEmpty(gameName) ? "Unnamed Game" : gameName,
+									Id = gameId,
+									Icon = gameIcon,
+									IconUrl = !string.IsNullOrWhiteSpace(gameId) && !string.IsNullOrWhiteSpace(gameIcon) ? $"https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/{gameId}/{gameIcon}" : "",
+									IsSteamGame = true
+								};
+								GeneratedGamesList.Items.Add(game);
+								string fileFull;
+								try { fileFull = Path.GetFullPath(steamExe); } catch { fileFull = steamExe; }
+								if (normalizedOldSelectedPath != null && fileFull.Equals(normalizedOldSelectedPath, StringComparison.OrdinalIgnoreCase))
+								{
+									toSelect = game;
+								}
+							}
+							catch { }
+						}
+					}
+				}
+				catch { }
+			}
+
 			// If we found the previously selected or forced path, select it.
 			if (toSelect != null)
 			{
@@ -1334,9 +1438,12 @@ namespace DiscordQuestCompleter
 				var contextMenu = new ContextMenu();
 				var openLocationItem = new MenuItem { Header = "Open the exe location" };
 				openLocationItem.Click += OpenGameLocation_Click;
-				var editGameItem = new MenuItem { Header = "Edit name or path" };
-				editGameItem.Click += EditGame_Click;
-				contextMenu.Items.Add(editGameItem);
+				if (item.DataContext is GeneratedGame game && !game.IsSteamGame)
+				{
+					var editGameItem = new MenuItem { Header = "Edit name or path" };
+					editGameItem.Click += EditGame_Click;
+					contextMenu.Items.Add(editGameItem);
+				}
 				contextMenu.Items.Add(openLocationItem);
 				item.ContextMenu = contextMenu;
 			}
@@ -1365,11 +1472,13 @@ namespace DiscordQuestCompleter
 					NotRunningButtons.Visibility = Visibility.Visible;
 					StopButton.Visibility = Visibility.Collapsed;
 				}
+				DeleteGameButton.Visibility = game.IsSteamGame ? Visibility.Collapsed : Visibility.Visible;
 			}
 			else
 			{
 				NotRunningButtons.Visibility = Visibility.Visible;
 				StopButton.Visibility = Visibility.Collapsed;
+				DeleteGameButton.Visibility = Visibility.Visible;
 			}
 		}
 
@@ -1476,6 +1585,12 @@ namespace DiscordQuestCompleter
 		{
 			if (GeneratedGamesList.SelectedItem is GeneratedGame game)
 			{
+				if (game.IsSteamGame)
+				{
+					MessageBox.Show("Steam games cannot be edited here.", "Edit Blocked");
+					return;
+				}
+
 				if (game.IsRunning || IsGameActuallyRunning(game.FullPath))
 				{
 					MessageBox.Show("Cannot edit a running game. Stop it first.", "Game is Running");
@@ -1569,6 +1684,12 @@ namespace DiscordQuestCompleter
 		{
 			if (GeneratedGamesList.SelectedItem is GeneratedGame game)
 			{
+				if (game.IsSteamGame)
+				{
+					MessageBox.Show("Steam games cannot be deleted here.", "Delete Blocked");
+					return;
+				}
+
 				if (game.IsRunning || IsGameActuallyRunning(game.FullPath))
 				{
 					MessageBox.Show("Cannot delete a running game. Stop it first.", "Game is Running");
@@ -1658,7 +1779,7 @@ namespace DiscordQuestCompleter
 
 			foreach (GeneratedGame game in GeneratedGamesList.Items)
 			{
-				if (game.IsRunning || IsGameActuallyRunning(game.FullPath))
+				if (!game.IsSteamGame && (game.IsRunning || IsGameActuallyRunning(game.FullPath)))
 				{
 					MessageBox.Show("Stop all running games before deleting the generated games folder contents.", "Games Are Running", MessageBoxButton.OK, MessageBoxImage.Warning);
 					return;
