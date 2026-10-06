@@ -63,6 +63,7 @@ namespace DiscordQuestCompleter
 		public double TimerMinutes { get; set; } = 15.0;
 		public bool CloseGameTimer { get; set; } = false;
 		public bool SendNotification { get; set; } = false;
+		public string SteamDirectory { get; set; } = "";
 	}
 
 	public partial class MainWindow : Window
@@ -218,6 +219,21 @@ namespace DiscordQuestCompleter
 				_settings.SendNotification = SendNotificationCheckBox.IsChecked == true;
 			}
 			SaveSettings();
+		}
+
+		private void SettingsButton_Click(object sender, RoutedEventArgs e)
+		{
+			var settingsWindow = new SettingsWindow(_settings.SteamDirectory)
+			{
+				Owner = this,
+				WindowStartupLocation = WindowStartupLocation.CenterOwner
+			};
+			settingsWindow.SteamDirectoryChanged += steamDirectory =>
+			{
+				_settings.SteamDirectory = steamDirectory;
+				SaveSettings();
+			};
+			settingsWindow.ShowDialog();
 		}
 
 		private void MainWindow_Closing(object sender, CancelEventArgs e)
@@ -423,6 +439,13 @@ namespace DiscordQuestCompleter
 		{
 			if (e.Key == Key.Enter)
 			{
+				if (Tabs.SelectedIndex != 0)
+				{
+					Tabs.Focus();
+					e.Handled = true;
+					return;
+				}
+
 				if (Tabs.SelectedIndex == 0 && _isDatabaseLoading && !_isSearchPlaceholder && !string.IsNullOrWhiteSpace(SearchBox.Text))
 				{
 					_pendingEnterQuery = SearchBox.Text.Trim();

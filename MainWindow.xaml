@@ -262,11 +262,13 @@
 					<TextBlock Text="EXE Path (Required):" Margin="0,0,0,5" FontWeight="Bold"/>
 					<TextBox x:Name="ManualPath" Margin="0,0,0,20"/>
 
-					<Button Content="Create Dummy Game (Enter)" Background="#3ba55c" Click="CreateGame_Click" Padding="10,12"/>
+					<Button Content="Create Dummy Game" Background="#3ba55c" Click="CreateGame_Click" Padding="10,12"/>
 				</StackPanel>
 			</TabItem>
 		</TabControl>
-
+		<Button x:Name="SettingsButton" Grid.Row="0" Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,17,0" Width="34" Height="32" Padding="0" Background="#3f4147" ToolTip="Settings" Click="SettingsButton_Click">
+			<TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+		</Button>
 		<!-- Right Panel: Generated Games -->
 		<Border Grid.Row="0" Grid.Column="1" Margin="0,0,0,8" Background="#292a2e" CornerRadius="6" Padding="15">
 			<Grid>

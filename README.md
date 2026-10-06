@@ -25,7 +25,7 @@ A new window will open and your quest should start progressing. Keep the window 
    (This will be created in `Discord Quest Completer/DQC Game Folders/[your path]`)
 2. Give it a name to identify it more easily later and also see that name in the Title.
    (It doesn't matter what you name it)
-3. Click "Create Dummy Game" or press Enter and this game will be added to your list.
+3. Click "Create Dummy Game" and this game will be added to your list.
 4. Now select the game from the right side and click "Run" or just double click on it.
 
 A new window will open and your quest should start progressing. Keep the window open to progress the quest.
