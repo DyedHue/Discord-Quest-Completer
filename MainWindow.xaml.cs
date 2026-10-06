@@ -1388,7 +1388,7 @@ string steamDirectory = SettingsWindow.NormalizeSteamDirectory(_settings.SteamDi
 									DisplayName = string.IsNullOrEmpty(gameName) ? "Unnamed Game" : gameName,
 									Id = gameId,
 									Icon = gameIcon,
-									IconUrl = !string.IsNullOrWhiteSpace(gameId) && !string.IsNullOrWhiteSpace(gameIcon) ? $"https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/{gameId}/{gameIcon}" : "",
+									IconUrl = !string.IsNullOrWhiteSpace(gameId) && !string.IsNullOrWhiteSpace(gameIcon) ? $"https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/{gameId}/{gameIcon}.jpg" : "",
 									IsSteamGame = true
 								};
 								GeneratedGamesList.Items.Add(game);
